@@ -1,10 +1,10 @@
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import Document, DocumentChunk, DocumentGroup, ProcessingJob
+from app.models import ApiKey, Document, DocumentChunk, DocumentGroup, ProcessingJob
 from app.schemas.documents import DocumentCreate, SearchResult
 from app.services.embeddings import get_embedding_service
 from app.services.text_splitter import TextSplitter
@@ -71,15 +71,59 @@ def update_document_group(
 def delete_document_group(
     session: Session,
     *,
+    vector_store: VectorStore,
     group_id: str,
     owner_id: str,
-) -> bool:
+) -> dict[str, str | bool | int] | None:
     group = get_document_group(session, group_id=group_id, owner_id=owner_id)
     if group is None:
-        return False
+        return None
+
+    document_ids = list(
+        session.scalars(
+            select(Document.id).where(
+                Document.group_id == group_id,
+                Document.owner_id == owner_id,
+            )
+        )
+    )
+    documents_deleted = len(document_ids)
+
+    api_keys_deleted = session.query(ApiKey).filter(
+        ApiKey.group_id == group_id,
+        ApiKey.user_id == owner_id,
+    ).delete(synchronize_session=False)
+
+    if document_ids:
+        session.query(ProcessingJob).filter(
+            ProcessingJob.document_id.in_(document_ids),
+            ProcessingJob.owner_id == owner_id,
+        ).delete(synchronize_session=False)
+        session.query(DocumentChunk).filter(
+            DocumentChunk.group_id == group_id,
+            DocumentChunk.owner_id == owner_id,
+        ).delete(synchronize_session=False)
+        session.query(Document).filter(
+            Document.id.in_(document_ids),
+            Document.group_id == group_id,
+            Document.owner_id == owner_id,
+        ).delete(synchronize_session=False)
+
+    vector_store.delete_by_metadata(
+        {
+            "owner_id": owner_id,
+            "group_id": group_id,
+        }
+    )
+
     session.delete(group)
     session.commit()
-    return True
+    return {
+        "id": group_id,
+        "deleted": True,
+        "documents_deleted": documents_deleted,
+        "api_keys_deleted": api_keys_deleted,
+    }
 
 
 def get_document(
@@ -124,10 +168,11 @@ def update_document(
 def delete_document(
     session: Session,
     *,
+    vector_store: VectorStore,
     document_id: str,
     group_id: str,
     owner_id: str,
-) -> bool:
+) -> dict[str, str | bool | int] | None:
     document = get_document(
         session,
         document_id=document_id,
@@ -135,10 +180,49 @@ def delete_document(
         owner_id=owner_id,
     )
     if document is None:
-        return False
+        return None
+    chunks_deleted = session.scalar(
+        select(func.count())
+        .select_from(DocumentChunk)
+        .where(
+            DocumentChunk.document_id == document_id,
+            DocumentChunk.group_id == group_id,
+            DocumentChunk.owner_id == owner_id,
+        )
+    )
+    jobs_deleted = session.scalar(
+        select(func.count())
+        .select_from(ProcessingJob)
+        .where(
+            ProcessingJob.document_id == document_id,
+            ProcessingJob.owner_id == owner_id,
+        )
+    )
+    vector_store.delete_by_metadata(
+        {
+            "owner_id": owner_id,
+            "group_id": group_id,
+            "document_id": document_id,
+        }
+    )
+    session.query(ProcessingJob).filter(
+        ProcessingJob.document_id == document_id,
+        ProcessingJob.owner_id == owner_id,
+    ).delete(synchronize_session=False)
+    session.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id,
+        DocumentChunk.group_id == group_id,
+        DocumentChunk.owner_id == owner_id,
+    ).delete(synchronize_session=False)
     session.delete(document)
     session.commit()
-    return True
+    return {
+        "id": document_id,
+        "group_id": group_id,
+        "deleted": True,
+        "chunks_deleted": chunks_deleted or 0,
+        "jobs_deleted": jobs_deleted or 0,
+    }
 
 
 def list_documents(
@@ -301,6 +385,13 @@ def index_document_text(
     document.status = "processing"
     document.error_message = None
     session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+    vector_store.delete_by_metadata(
+        {
+            "owner_id": document.owner_id,
+            "group_id": document.group_id,
+            "document_id": document.id,
+        }
+    )
     session.flush()
 
     chunk_models = [

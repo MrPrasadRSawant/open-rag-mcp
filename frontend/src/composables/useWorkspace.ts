@@ -129,12 +129,24 @@ export function useWorkspace(session: SessionStore) {
     clearFeedback();
     actionBusy.value = true;
     try {
-      await deleteGroup(session.token, groupId);
-      if (selectedGroupId.value === groupId) {
-        selectedGroupId.value = null;
+      const deletedGroup = await deleteGroup(session.token, groupId);
+      if (!deletedGroup.deleted) {
+        throw new Error('Document group was not deleted.');
       }
-      statusMessage.value = 'Document group deleted.';
-      await loadWorkspace();
+
+      groups.value = groups.value.filter((group) => group.id !== deletedGroup.id);
+      apiKeys.value = apiKeys.value.filter((key) => key.group_id !== deletedGroup.id);
+      if (selectedGroupId.value === deletedGroup.id) {
+        selectedGroupId.value = groups.value[0]?.id || null;
+        searchResults.value = [];
+        jobs.value = [];
+        if (selectedGroupId.value) {
+          await loadDocuments();
+        } else {
+          documents.value = [];
+        }
+      }
+      statusMessage.value = `Document group deleted. Removed ${deletedGroup.documents_deleted} document${deletedGroup.documents_deleted === 1 ? '' : 's'}.`;
     } catch (error) {
       setError(error);
     } finally {
@@ -194,9 +206,21 @@ export function useWorkspace(session: SessionStore) {
     clearFeedback();
     actionBusy.value = true;
     try {
-      await deleteDocument(session.token, selectedGroupId.value, documentId);
-      statusMessage.value = 'Document deleted.';
-      await loadDocuments();
+      const deletedDocument = await deleteDocument(
+        session.token,
+        selectedGroupId.value,
+        documentId,
+      );
+      if (!deletedDocument.deleted) {
+        throw new Error('Document was not deleted.');
+      }
+
+      documents.value = documents.value.filter((document) => document.id !== deletedDocument.id);
+      searchResults.value = searchResults.value.filter(
+        (result) => result.document_id !== deletedDocument.id,
+      );
+      jobs.value = jobs.value.filter((job) => job.document_id !== deletedDocument.id);
+      statusMessage.value = `Document deleted. Removed ${deletedDocument.chunks_deleted} indexed chunk${deletedDocument.chunks_deleted === 1 ? '' : 's'}.`;
     } catch (error) {
       setError(error);
     } finally {

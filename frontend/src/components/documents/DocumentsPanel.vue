@@ -73,7 +73,8 @@
                 round
                 color="negative"
                 icon="delete"
-                @click="$emit('deleteDocument', props.row.id)"
+                :disable="busy"
+                @click="openDeleteDialog(props.row)"
               >
                 <q-tooltip>Delete document</q-tooltip>
               </q-btn>
@@ -143,6 +144,31 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="deleteDialogOpen" persistent>
+      <q-card class="edit-dialog">
+        <q-card-section>
+          <div class="text-h6">Delete document</div>
+        </q-card-section>
+        <q-card-section class="dialog-form">
+          <p class="confirm-copy">
+            Delete <strong>{{ deleteTarget?.title }}</strong
+            >? This will remove the document and its indexed search data.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" no-caps :disable="busy" @click="deleteDialogOpen = false" />
+          <q-btn
+            color="negative"
+            icon="delete"
+            label="Delete"
+            :loading="busy"
+            no-caps
+            @click="confirmDelete"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -184,6 +210,8 @@ const uploadFile = ref<File | null>(null);
 const editDialogOpen = ref(false);
 const editDocumentId = ref('');
 const editTitle = ref('');
+const deleteDialogOpen = ref(false);
+const deleteTarget = ref<DocumentItem | null>(null);
 
 const createModeOptions = [
   { label: 'Text', value: 'text' },
@@ -240,5 +268,17 @@ function submitEdit() {
   if (!editDocumentId.value || !editTitle.value.trim()) return;
   emit('updateDocument', editDocumentId.value, { title: editTitle.value });
   editDialogOpen.value = false;
+}
+
+function openDeleteDialog(document: DocumentItem) {
+  deleteTarget.value = document;
+  deleteDialogOpen.value = true;
+}
+
+function confirmDelete() {
+  if (!deleteTarget.value) return;
+  emit('deleteDocument', deleteTarget.value.id);
+  deleteDialogOpen.value = false;
+  deleteTarget.value = null;
 }
 </script>

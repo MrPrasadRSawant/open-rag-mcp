@@ -107,6 +107,31 @@ class SQLiteVectorStore:
         with self._connect() as connection:
             connection.execute("DELETE FROM vector_documents")
 
+    def delete_by_metadata(
+        self,
+        metadata_filter: dict[str, str | int | float | bool | None],
+    ) -> None:
+        cleaned = {
+            key: value
+            for key, value in metadata_filter.items()
+            if isinstance(value, str | int | float | bool)
+        }
+        if not cleaned:
+            return
+
+        with self._connect() as connection:
+            rows = connection.execute("SELECT id, metadata FROM vector_documents").fetchall()
+            ids_to_delete = [
+                document_id
+                for document_id, metadata_json in rows
+                if self._metadata_matches(json.loads(metadata_json), cleaned)
+            ]
+            if ids_to_delete:
+                connection.executemany(
+                    "DELETE FROM vector_documents WHERE id = ?",
+                    [(document_id,) for document_id in ids_to_delete],
+                )
+
     def _cosine_similarity(self, left: list[float], right: list[float]) -> float:
         if len(left) != len(right) or not left:
             return 0.0
@@ -120,3 +145,10 @@ class SQLiteVectorStore:
             return 0.0
 
         return dot_product / (left_norm * right_norm)
+
+    def _metadata_matches(
+        self,
+        metadata: dict[str, str | int | float | bool | None],
+        metadata_filter: dict[str, str | int | float | bool],
+    ) -> bool:
+        return all(metadata.get(key) == value for key, value in metadata_filter.items())

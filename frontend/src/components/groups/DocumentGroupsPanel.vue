@@ -8,9 +8,21 @@
           Groups separate document collections. Select one before working with documents or search.
         </p>
       </div>
-      <div class="screen-actions">
-        <q-btn color="primary" icon="add" label="Add new group" no-caps @click="openCreateDialog" />
-      </div>
+    </section>
+
+    <section class="workspace-panel document-toolbar">
+      <q-select
+        v-model="currentGroupId"
+        :options="groupOptions"
+        emit-value
+        map-options
+        label="Selected document group"
+        outlined
+        dense
+        class="toolbar-select"
+        :disable="!groups.length"
+      />
+      <q-btn color="primary" icon="add" label="Add new group" no-caps @click="openCreateDialog" />
     </section>
 
     <section class="workspace-panel table-panel">
@@ -56,7 +68,8 @@
                 round
                 color="negative"
                 icon="delete"
-                @click="$emit('deleteGroup', props.row.id)"
+                :disable="busy"
+                @click="openDeleteDialog(props.row)"
               >
                 <q-tooltip>Delete group</q-tooltip>
               </q-btn>
@@ -108,16 +121,41 @@
         </q-form>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="deleteDialogOpen" persistent>
+      <q-card class="edit-dialog">
+        <q-card-section>
+          <div class="text-h6">Delete document group</div>
+        </q-card-section>
+        <q-card-section class="dialog-form">
+          <p class="confirm-copy">
+            Delete <strong>{{ deleteTarget?.name }}</strong
+            >? This will remove the group, its documents, API keys, and indexed search data.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" no-caps :disable="busy" @click="deleteDialogOpen = false" />
+          <q-btn
+            color="negative"
+            icon="delete"
+            label="Delete"
+            :loading="busy"
+            no-caps
+            @click="confirmDelete"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { DocumentGroup } from '@/services/api';
 
-defineProps<{
+const props = defineProps<{
   groups: DocumentGroup[];
   selectedGroupId: string | null;
   busy: boolean;
@@ -133,9 +171,21 @@ const emit = defineEmits<{
 
 const createDialogOpen = ref(false);
 const editDialogOpen = ref(false);
+const deleteDialogOpen = ref(false);
 const editingGroup = ref<DocumentGroup | null>(null);
+const deleteTarget = ref<DocumentGroup | null>(null);
 const createForm = reactive({ name: '', description: '' });
 const editForm = reactive({ name: '', description: '' });
+
+const groupOptions = computed(() =>
+  props.groups.map((group) => ({ label: group.name, value: group.id })),
+);
+const currentGroupId = computed({
+  get: () => props.selectedGroupId,
+  set: (value) => {
+    if (value) emit('selectGroup', value);
+  },
+});
 
 const columns: QTableColumn<DocumentGroup>[] = [
   { name: 'active', label: '', field: 'id', align: 'left' },
@@ -179,5 +229,17 @@ function submitEdit() {
     description: editForm.description || null,
   });
   editDialogOpen.value = false;
+}
+
+function openDeleteDialog(group: DocumentGroup) {
+  deleteTarget.value = group;
+  deleteDialogOpen.value = true;
+}
+
+function confirmDelete() {
+  if (!deleteTarget.value) return;
+  emit('deleteGroup', deleteTarget.value.id);
+  deleteDialogOpen.value = false;
+  deleteTarget.value = null;
 }
 </script>

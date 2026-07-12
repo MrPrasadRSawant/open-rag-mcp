@@ -93,6 +93,17 @@ class ChromaVectorStore:
         client = chromadb.PersistentClient(path=self.persist_directory)
         client.delete_collection(name=self.collection_name)
 
+    def delete_by_metadata(
+        self,
+        metadata_filter: dict[str, str | int | float | bool | None],
+    ) -> None:
+        where = self._where(metadata_filter)
+        if not where:
+            return
+
+        collection = self._collection()
+        collection.delete(where=where)
+
     def _where(
         self,
         metadata_filter: dict[str, str | int | float | bool | None] | None,

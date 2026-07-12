@@ -103,6 +103,11 @@ def test_api_can_create_group_ingest_document_and_search(tmp_path) -> None:
         )
         document_delete_response.raise_for_status()
 
+        vector_results_after_delete = vector_store.search(
+            [1.0] + [0.0] * (settings.embedding_dimension - 1),
+            metadata_filter={"document_id": document_id},
+        )
+
         stale_search_response = client.post(
             "/search",
             json={"query": "service health rollback", "group_ids": [group_id]},
@@ -115,6 +120,49 @@ def test_api_can_create_group_ingest_document_and_search(tmp_path) -> None:
             headers=headers,
         )
         group_delete_response.raise_for_status()
+
+        archive_group_response = client.post(
+            "/document-groups",
+            json={"name": "Archive"},
+            headers=headers,
+        )
+        archive_group_response.raise_for_status()
+        archive_group_id = archive_group_response.json()["id"]
+
+        archive_document_response = client.post(
+            f"/document-groups/{archive_group_id}/documents",
+            json={
+                "title": "Archive Runbook",
+                "text": "Archive retention policies include deletion and restore procedures.",
+            },
+            headers=headers,
+        )
+        archive_document_response.raise_for_status()
+
+        archive_search_response = client.post(
+            "/search",
+            json={"query": "archive retention restore", "group_ids": [archive_group_id]},
+            headers=headers,
+        )
+        archive_search_response.raise_for_status()
+
+        archive_group_delete_response = client.delete(
+            f"/document-groups/{archive_group_id}",
+            headers=headers,
+        )
+        archive_group_delete_response.raise_for_status()
+
+        archive_vector_results_after_delete = vector_store.search(
+            [1.0] + [0.0] * (settings.embedding_dimension - 1),
+            metadata_filter={"group_id": archive_group_id},
+        )
+
+        archive_stale_search_response = client.post(
+            "/search",
+            json={"query": "archive retention restore", "group_ids": [archive_group_id]},
+            headers=headers,
+        )
+        archive_stale_search_response.raise_for_status()
     finally:
         app.dependency_overrides.clear()
 
@@ -125,6 +173,19 @@ def test_api_can_create_group_ingest_document_and_search(tmp_path) -> None:
     assert search_response.json()["results"][0]["metadata"]["team"] == "platform"
     assert group_update_response.json()["name"] == "Engineering Updated"
     assert document_update_response.json()["title"] == "Runbook Updated"
-    assert document_delete_response.status_code == 204
+    assert document_delete_response.status_code == 200
+    assert document_delete_response.json()["deleted"] is True
+    assert document_delete_response.json()["id"] == document_id
+    assert document_delete_response.json()["group_id"] == group_id
+    assert document_delete_response.json()["chunks_deleted"] == 1
+    assert document_delete_response.json()["jobs_deleted"] == 1
+    assert vector_results_after_delete == []
     assert stale_search_response.json()["results"] == []
-    assert group_delete_response.status_code == 204
+    assert group_delete_response.status_code == 200
+    assert group_delete_response.json()["deleted"] is True
+    assert group_delete_response.json()["id"] == group_id
+    assert archive_document_response.json()["status"] == "queued"
+    assert archive_search_response.json()["results"]
+    assert archive_group_delete_response.json()["documents_deleted"] == 1
+    assert archive_vector_results_after_delete == []
+    assert archive_stale_search_response.json()["results"] == []

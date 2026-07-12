@@ -22,6 +22,13 @@ export type DocumentGroup = {
   updated_at: string;
 };
 
+export type DeletedDocumentGroup = {
+  id: string;
+  deleted: boolean;
+  documents_deleted: number;
+  api_keys_deleted: number;
+};
+
 export type DocumentItem = {
   id: string;
   owner_id: string;
@@ -36,6 +43,14 @@ export type DocumentItem = {
   updated_at: string;
   chunk_count: number;
   processing_job_id: string | null;
+};
+
+export type DeletedDocument = {
+  id: string;
+  group_id: string;
+  deleted: boolean;
+  chunks_deleted: number;
+  jobs_deleted: number;
 };
 
 export type ProcessingJob = {
@@ -141,8 +156,8 @@ export async function updateGroup(
   });
 }
 
-export async function deleteGroup(token: string, groupId: string): Promise<void> {
-  await request<void>(`/document-groups/${groupId}`, {
+export async function deleteGroup(token: string, groupId: string): Promise<DeletedDocumentGroup> {
+  return request<DeletedDocumentGroup>(`/document-groups/${groupId}`, {
     method: 'DELETE',
     token,
   });
@@ -199,8 +214,8 @@ export async function deleteDocument(
   token: string,
   groupId: string,
   documentId: string,
-): Promise<void> {
-  await request<void>(`/document-groups/${groupId}/documents/${documentId}`, {
+): Promise<DeletedDocument> {
+  return request<DeletedDocument>(`/document-groups/${groupId}/documents/${documentId}`, {
     method: 'DELETE',
     token,
   });

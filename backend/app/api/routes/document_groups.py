@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import CurrentUserDependency, SessionDependency
-from app.schemas.documents import DocumentGroupCreate, DocumentGroupRead, DocumentGroupUpdate
+from app.api.dependencies import CurrentUserDependency, SessionDependency, VectorStoreDependency
+from app.schemas.documents import (
+    DocumentGroupCreate,
+    DocumentGroupDeleteRead,
+    DocumentGroupRead,
+    DocumentGroupUpdate,
+)
 from app.services.documents import (
     create_document_group,
     delete_document_group,
@@ -77,15 +82,22 @@ def update_group(
     return group
 
 
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{group_id}", response_model=DocumentGroupDeleteRead)
 def delete_group(
     group_id: str,
     session: SessionDependency,
     current_user: CurrentUserDependency,
-) -> None:
-    deleted = delete_document_group(session, group_id=group_id, owner_id=current_user.id)
-    if not deleted:
+    vector_store: VectorStoreDependency,
+) -> DocumentGroupDeleteRead:
+    deleted = delete_document_group(
+        session,
+        vector_store=vector_store,
+        group_id=group_id,
+        owner_id=current_user.id,
+    )
+    if deleted is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document group not found",
         )
+    return DocumentGroupDeleteRead(**deleted)

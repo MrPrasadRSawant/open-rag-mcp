@@ -88,6 +88,17 @@ class PgVectorStore:
         with self._connect() as connection:
             connection.execute("DELETE FROM vector_documents")
 
+    def delete_by_metadata(
+        self,
+        metadata_filter: dict[str, str | int | float | bool | None],
+    ) -> None:
+        where_sql, params = self._metadata_where(metadata_filter)
+        if not where_sql:
+            return
+
+        with self._connect() as connection:
+            connection.execute(f"DELETE FROM vector_documents {where_sql}", params)
+
     def _connect(self):
         try:
             import psycopg

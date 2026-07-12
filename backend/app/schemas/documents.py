@@ -25,6 +25,13 @@ class DocumentGroupRead(BaseModel):
     updated_at: datetime
 
 
+class DocumentGroupDeleteRead(BaseModel):
+    id: str
+    deleted: bool
+    documents_deleted: int
+    api_keys_deleted: int
+
+
 class DocumentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     text: str = Field(min_length=1)
@@ -53,6 +60,14 @@ class DocumentRead(BaseModel):
     updated_at: datetime
     chunk_count: int = 0
     processing_job_id: str | None = None
+
+
+class DocumentDeleteRead(BaseModel):
+    id: str
+    group_id: str
+    deleted: bool
+    chunks_deleted: int
+    jobs_deleted: int
 
 
 class SearchRequest(BaseModel):

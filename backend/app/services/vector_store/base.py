@@ -42,5 +42,11 @@ class VectorStore(Protocol):
     ) -> list[VectorSearchResult]:
         raise NotImplementedError
 
+    def delete_by_metadata(
+        self,
+        metadata_filter: dict[str, str | int | float | bool | None],
+    ) -> None:
+        raise NotImplementedError
+
     def delete_collection(self) -> None:
         raise NotImplementedError

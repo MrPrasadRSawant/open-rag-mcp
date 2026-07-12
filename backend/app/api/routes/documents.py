@@ -6,8 +6,9 @@ from app.api.dependencies import (
     CurrentUserDependency,
     SessionDependency,
     SettingsDependency,
+    VectorStoreDependency,
 )
-from app.schemas.documents import DocumentCreate, DocumentRead, DocumentUpdate
+from app.schemas.documents import DocumentCreate, DocumentDeleteRead, DocumentRead, DocumentUpdate
 from app.services.documents import (
     create_queued_text_document,
     create_queued_upload_document,
@@ -140,21 +141,24 @@ def update_group_document(
     return document_with_chunk_count(document)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}", response_model=DocumentDeleteRead)
 def delete_group_document(
     group_id: str,
     document_id: str,
     session: SessionDependency,
+    vector_store: VectorStoreDependency,
     current_user: CurrentUserDependency,
-) -> None:
+) -> DocumentDeleteRead:
     deleted = delete_document(
         session,
+        vector_store=vector_store,
         document_id=document_id,
         group_id=group_id,
         owner_id=current_user.id,
     )
-    if not deleted:
+    if deleted is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
+    return DocumentDeleteRead(**deleted)
