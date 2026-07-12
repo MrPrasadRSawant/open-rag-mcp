@@ -1,6 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import CurrentUserDependency, SessionDependency, VectorStoreDependency
+from app.api.dependencies import (
+    CurrentUserDependency,
+    SessionDependency,
+    SettingsDependency,
+    VectorStoreDependency,
+)
 from app.schemas.documents import (
     DocumentGroupCreate,
     DocumentGroupDeleteRead,
@@ -27,13 +32,21 @@ def create_group(
     payload: DocumentGroupCreate,
     session: SessionDependency,
     current_user: CurrentUserDependency,
+    settings: SettingsDependency,
 ) -> DocumentGroupRead:
-    return create_document_group(
-        session,
-        name=payload.name,
-        description=payload.description,
-        owner_id=current_user.id,
-    )
+    try:
+        return create_document_group(
+            session,
+            name=payload.name,
+            description=payload.description,
+            owner_id=current_user.id,
+            llm_config_id=payload.llm_config_id,
+            default_embedding_model=settings.embedding_model_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.get("", response_model=list[DocumentGroupRead])

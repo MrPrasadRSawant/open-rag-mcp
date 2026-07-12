@@ -30,5 +30,11 @@ def search(
             group_ids=payload.group_ids,
             limit=payload.limit,
             owner_id=current_user.id,
+            candidate_limit=payload.candidate_limit,
+            rerank=payload.rerank,
+            lexical_weight=payload.lexical_weight,
+            diversity=payload.diversity,
+            diversity_lambda=payload.diversity_lambda,
+            min_score=payload.min_score,
         ),
     )

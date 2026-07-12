@@ -63,6 +63,12 @@ def create_mcp_server(runtime_settings: Settings) -> FastMCP:
     def search_documents(
         query: str,
         limit: int = 5,
+        candidate_limit: int | None = None,
+        rerank: bool | None = None,
+        lexical_weight: float | None = None,
+        diversity: bool | None = None,
+        diversity_lambda: float | None = None,
+        min_score: float | None = None,
     ) -> dict:
         """Search only the document group assigned to the bearer token."""
         access = get_authenticated_mcp_context()
@@ -76,6 +82,12 @@ def create_mcp_server(runtime_settings: Settings) -> FastMCP:
                 access=access,
                 query=query,
                 limit=limit,
+                candidate_limit=candidate_limit,
+                rerank=rerank,
+                lexical_weight=lexical_weight,
+                diversity=diversity,
+                diversity_lambda=diversity_lambda,
+                min_score=min_score,
             )
 
     return server

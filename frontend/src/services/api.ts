@@ -18,6 +18,8 @@ export type DocumentGroup = {
   owner_id: string;
   name: string;
   description: string | null;
+  llm_config_id: string | null;
+  llm_config_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -72,7 +74,19 @@ export type SearchResult = {
   group_id: string;
   text: string;
   score: number;
+  vector_score: number | null;
+  lexical_score: number | null;
   metadata: Record<string, unknown>;
+};
+
+export type SearchOptions = {
+  limit?: number;
+  candidate_limit?: number;
+  rerank?: boolean;
+  lexical_weight?: number;
+  diversity?: boolean;
+  diversity_lambda?: number;
+  min_score?: number | null;
 };
 
 export type ApiKey = {
@@ -88,6 +102,34 @@ export type ApiKey = {
 
 export type CreatedApiKey = ApiKey & {
   api_key: string;
+};
+
+export type LlmProvider =
+  | 'internal'
+  | 'openai'
+  | 'azure_openai'
+  | 'anthropic'
+  | 'google'
+  | 'cohere'
+  | 'mistral'
+  | 'voyage'
+  | 'custom';
+
+export type LlmConfigType = 'embedding' | 'chat_llm';
+
+export type LlmProviderConfig = {
+  id: string;
+  name: string;
+  provider: LlmProvider;
+  purpose: LlmConfigType;
+  api_key_hint: string | null;
+  base_url: string | null;
+  embedding_model: string | null;
+  chat_model: string | null;
+  in_use_by_groups: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -135,7 +177,7 @@ export async function listGroups(token: string): Promise<DocumentGroup[]> {
 
 export async function createGroup(
   token: string,
-  payload: { name: string; description?: string | null },
+  payload: { name: string; description?: string | null; llm_config_id: string },
 ): Promise<DocumentGroup> {
   return request<DocumentGroup>('/document-groups', {
     method: 'POST',
@@ -227,7 +269,7 @@ export async function getJob(token: string, jobId: string): Promise<ProcessingJo
 
 export async function searchDocuments(
   token: string,
-  payload: { query: string; group_ids?: string[]; limit?: number },
+  payload: { query: string; group_ids?: string[] } & SearchOptions,
 ): Promise<{ query: string; results: SearchResult[] }> {
   return request<{ query: string; results: SearchResult[] }>('/search', {
     method: 'POST',
@@ -253,6 +295,36 @@ export async function createApiKey(
 
 export async function revokeApiKey(token: string, apiKeyId: string): Promise<ApiKey> {
   return request<ApiKey>(`/api-keys/${apiKeyId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function listLlmConfigs(token: string): Promise<LlmProviderConfig[]> {
+  return request<LlmProviderConfig[]>('/llm-configs', { token });
+}
+
+export async function createLlmConfig(
+  token: string,
+  payload: {
+    name: string;
+    provider: LlmProvider;
+    config_type: LlmConfigType;
+    api_key: string;
+    base_url?: string | null;
+    embedding_model?: string | null;
+    chat_model?: string | null;
+  },
+): Promise<LlmProviderConfig> {
+  return request<LlmProviderConfig>('/llm-configs', {
+    method: 'POST',
+    token,
+    body: payload,
+  });
+}
+
+export async function deleteLlmConfig(token: string, configId: string): Promise<LlmProviderConfig> {
+  return request<LlmProviderConfig>(`/llm-configs/${configId}`, {
     method: 'DELETE',
     token,
   });

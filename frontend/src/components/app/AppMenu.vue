@@ -43,6 +43,12 @@ const navItems = [
     icon: 'space_dashboard',
   },
   {
+    name: 'llm',
+    label: 'LLM Config',
+    caption: 'Set up models first',
+    icon: 'tune',
+  },
+  {
     name: 'groups',
     label: 'Document Groups',
     caption: 'List and manage groups',

@@ -1,8 +1,13 @@
+import math
 import sys
 from types import SimpleNamespace
 
 from app.core.config import EmbeddingProvider, Settings
-from app.services.embeddings import get_embedding_service
+from app.services.embeddings import (
+    DimensionNormalizedEmbeddingService,
+    RemoteEmbeddingService,
+    get_embedding_service,
+)
 
 
 class FakeEmbedding(list):
@@ -55,3 +60,39 @@ def test_sentence_transformer_provider_uses_query_instruction(monkeypatch) -> No
         "passage text",
         "Represent this sentence for searching relevant passages: query text",
     ]
+
+
+class VariableDimensionService:
+    def embed_document(self, text: str) -> list[float]:
+        return [1.0, 2.0, 3.0, 4.0]
+
+    def embed_query(self, text: str) -> list[float]:
+        return [1.0, 2.0, 3.0, 4.0]
+
+
+def test_remote_embeddings_are_normalized_to_vector_store_dimension() -> None:
+    service = DimensionNormalizedEmbeddingService(VariableDimensionService(), 2)
+
+    vector = service.embed_query("query")
+
+    assert len(vector) == 2
+    assert math.isclose(sum(value * value for value in vector), 1.0)
+
+
+def test_gemini_embedding_request_uses_header_and_configured_dimension() -> None:
+    service = RemoteEmbeddingService(
+        provider="google",
+        model="gemini-embedding-2",
+        api_key="gemini-secret",
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        output_dimension=384,
+    )
+
+    url, headers, payload = service._request("meaning of life", input_type="query")
+
+    assert url.endswith("/models/gemini-embedding-2:embedContent")
+    assert "gemini-secret" not in url
+    assert headers == {"x-goog-api-key": "gemini-secret"}
+    assert payload["model"] == "models/gemini-embedding-2"
+    assert payload["output_dimensionality"] == 384
+    assert payload["content"]["parts"][0]["text"].startswith("task: search result")

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         extra="ignore",
     )
 
@@ -82,6 +83,12 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 32
     chunk_size: int = 1200
     chunk_overlap: int = 150
+    retrieval_candidate_limit: int = 30
+    retrieval_rerank_enabled: bool = True
+    retrieval_lexical_weight: float = 0.35
+    retrieval_diversity_enabled: bool = False
+    retrieval_diversity_lambda: float = 0.75
+    retrieval_min_score: float | None = None
     upload_directory: str = "./data/uploads"
     max_upload_size_mb: int = 25
     ocr_provider: OcrProvider = OcrProvider.disabled

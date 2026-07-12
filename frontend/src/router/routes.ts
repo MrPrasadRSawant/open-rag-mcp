@@ -30,6 +30,12 @@ const routes: RouteRecordRaw[] = [
         meta: { section: 'search' },
       },
       {
+        path: 'llm-config',
+        name: 'llm',
+        component: () => import('@/pages/IndexPage.vue'),
+        meta: { section: 'llm' },
+      },
+      {
         path: 'api-keys',
         name: 'keys',
         component: () => import('@/pages/IndexPage.vue'),

@@ -87,6 +87,16 @@
         <q-form @submit.prevent="submitCreate">
           <q-card-section class="dialog-form">
             <q-input v-model="createForm.name" label="Group name" outlined dense autofocus />
+            <q-select
+              v-model="createForm.llm_config_id"
+              :options="embeddingConfigOptions"
+              emit-value
+              map-options
+              label="Embedding config"
+              outlined
+              dense
+              hint="This mapping cannot be changed after the group is created."
+            />
             <q-input v-model="createForm.description" label="Description" outlined dense />
           </q-card-section>
           <q-card-actions align="right">
@@ -153,18 +163,19 @@
 import type { QTableColumn } from 'quasar';
 import { computed, reactive, ref } from 'vue';
 
-import type { DocumentGroup } from '@/services/api';
+import type { DocumentGroup, LlmProviderConfig } from '@/services/api';
 
 const props = defineProps<{
   groups: DocumentGroup[];
   selectedGroupId: string | null;
   busy: boolean;
+  llmConfigs: LlmProviderConfig[];
 }>();
 
 const emit = defineEmits<{
   refresh: [];
   selectGroup: [groupId: string];
-  createGroup: [payload: { name: string; description?: string | null }];
+  createGroup: [payload: { name: string; description?: string | null; llm_config_id: string }];
   updateGroup: [groupId: string, payload: { name?: string; description?: string | null }];
   deleteGroup: [groupId: string];
 }>();
@@ -174,11 +185,19 @@ const editDialogOpen = ref(false);
 const deleteDialogOpen = ref(false);
 const editingGroup = ref<DocumentGroup | null>(null);
 const deleteTarget = ref<DocumentGroup | null>(null);
-const createForm = reactive({ name: '', description: '' });
+const createForm = reactive({ name: '', description: '', llm_config_id: '' });
 const editForm = reactive({ name: '', description: '' });
 
 const groupOptions = computed(() =>
   props.groups.map((group) => ({ label: group.name, value: group.id })),
+);
+const embeddingConfigOptions = computed(() =>
+  props.llmConfigs
+    .filter((config) => config.purpose === 'embedding' && config.is_active)
+    .map((config) => ({
+      label: `${config.name} (${config.embedding_model || config.provider})`,
+      value: config.id,
+    })),
 );
 const currentGroupId = computed({
   get: () => props.selectedGroupId,
@@ -196,6 +215,12 @@ const columns: QTableColumn<DocumentGroup>[] = [
     field: (row) => row.description || '',
     align: 'left',
   },
+  {
+    name: 'embedding_config',
+    label: 'Embedding config',
+    field: (row) => row.llm_config_name || '',
+    align: 'left',
+  },
   { name: 'updated', label: 'Updated', field: 'updated_at', align: 'left', sortable: true },
   { name: 'actions', label: '', field: 'id', align: 'right' },
 ];
@@ -203,14 +228,16 @@ const columns: QTableColumn<DocumentGroup>[] = [
 function openCreateDialog() {
   createForm.name = '';
   createForm.description = '';
+  createForm.llm_config_id = embeddingConfigOptions.value[0]?.value || '';
   createDialogOpen.value = true;
 }
 
 function submitCreate() {
-  if (!createForm.name.trim()) return;
+  if (!createForm.name.trim() || !createForm.llm_config_id) return;
   emit('createGroup', {
     name: createForm.name,
     description: createForm.description || null,
+    llm_config_id: createForm.llm_config_id,
   });
   createDialogOpen.value = false;
 }

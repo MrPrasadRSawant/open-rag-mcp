@@ -4,9 +4,18 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import ApiKey, Document, DocumentChunk, DocumentGroup, ProcessingJob
+from app.models import (
+    ApiKey,
+    Document,
+    DocumentChunk,
+    DocumentGroup,
+    LlmProviderConfig,
+    ProcessingJob,
+)
 from app.schemas.documents import DocumentCreate, SearchResult
-from app.services.embeddings import get_embedding_service
+from app.services.embeddings import get_embedding_service_for_group
+from app.services.llm_configs import get_or_create_default_embedding_config
+from app.services.retrieval import RetrievalOptions, rerank_vector_results
 from app.services.text_splitter import TextSplitter
 from app.services.vector_store.base import VectorDocument, VectorStore
 
@@ -17,8 +26,30 @@ def create_document_group(
     name: str,
     description: str | None = None,
     owner_id: str = "local",
+    llm_config_id: str | None = None,
+    default_embedding_model: str = "BAAI/bge-small-en-v1.5",
 ) -> DocumentGroup:
-    group = DocumentGroup(name=name, description=description, owner_id=owner_id)
+    if llm_config_id is None:
+        config = get_or_create_default_embedding_config(
+            session, user_id=owner_id, model_name=default_embedding_model
+        )
+    else:
+        config = session.scalar(
+            select(LlmProviderConfig).where(
+                LlmProviderConfig.id == llm_config_id,
+                LlmProviderConfig.user_id == owner_id,
+                LlmProviderConfig.purpose == "embedding",
+                LlmProviderConfig.is_active.is_(True),
+            )
+        )
+        if config is None:
+            raise ValueError("Select a valid embedding config")
+    group = DocumentGroup(
+        name=name,
+        description=description,
+        owner_id=owner_id,
+        llm_config_id=config.id,
+    )
     session.add(group)
     session.commit()
     session.refresh(group)
@@ -377,7 +408,7 @@ def index_document_text(
     metadata: dict[str, Any],
 ) -> Document:
     splitter = TextSplitter(settings.chunk_size, settings.chunk_overlap)
-    embedding_service = get_embedding_service(settings)
+    embedding_service = get_embedding_service_for_group(session, document.group_id, settings)
     chunks = splitter.split(text)
     if not chunks:
         raise ValueError("document text did not contain indexable content")
@@ -445,20 +476,55 @@ def search_documents(
     group_ids: list[str] | None = None,
     limit: int = 5,
     owner_id: str = "local",
+    candidate_limit: int | None = None,
+    rerank: bool | None = None,
+    lexical_weight: float | None = None,
+    diversity: bool | None = None,
+    diversity_lambda: float | None = None,
+    min_score: float | None = None,
 ) -> list[SearchResult]:
-    embedding_service = get_embedding_service(settings)
-    metadata_filter: dict[str, str | int | float | bool | None] = {"owner_id": owner_id}
-    if group_ids and len(group_ids) == 1:
-        metadata_filter["group_id"] = group_ids[0]
-
-    vector_results = vector_store.search(
-        embedding_service.embed_query(query),
+    retrieval_options = RetrievalOptions(
         limit=limit,
-        metadata_filter=metadata_filter,
+        candidate_limit=candidate_limit or settings.retrieval_candidate_limit,
+        rerank=settings.retrieval_rerank_enabled if rerank is None else rerank,
+        lexical_weight=(
+            settings.retrieval_lexical_weight if lexical_weight is None else lexical_weight
+        ),
+        diversity=settings.retrieval_diversity_enabled if diversity is None else diversity,
+        diversity_lambda=(
+            settings.retrieval_diversity_lambda
+            if diversity_lambda is None
+            else diversity_lambda
+        ),
+        min_score=settings.retrieval_min_score if min_score is None else min_score,
+    ).normalized()
+    selected_groups = list(
+        session.scalars(
+            select(DocumentGroup).where(
+                DocumentGroup.owner_id == owner_id,
+                *( [DocumentGroup.id.in_(group_ids)] if group_ids else [] ),
+            )
+        )
+    )
+    vector_results = []
+    for group in selected_groups:
+        embedding_service = get_embedding_service_for_group(session, group.id, settings)
+        vector_results.extend(
+            vector_store.search(
+                embedding_service.embed_query(query),
+                limit=retrieval_options.candidate_limit,
+                metadata_filter={"owner_id": owner_id, "group_id": group.id},
+            )
+        )
+    ranked_results = rerank_vector_results(
+        query=query,
+        results=vector_results,
+        options=retrieval_options,
     )
 
     filtered_results = []
-    for result in vector_results:
+    for ranked in ranked_results:
+        result = ranked.result
         if group_ids and result.metadata.get("group_id") not in group_ids:
             continue
         document_id = str(result.metadata.get("document_id", ""))
@@ -478,8 +544,17 @@ def search_documents(
                 document_id=document_id,
                 group_id=group_id,
                 text=result.text,
-                score=result.score,
-                metadata=result.metadata,
+                score=ranked.final_score,
+                vector_score=ranked.vector_score,
+                lexical_score=ranked.lexical_score,
+                metadata={
+                    **result.metadata,
+                    "retrieval": {
+                        "rerank": retrieval_options.rerank,
+                        "diversity": retrieval_options.diversity,
+                        "candidate_limit": retrieval_options.candidate_limit,
+                    },
+                },
             )
         )
 

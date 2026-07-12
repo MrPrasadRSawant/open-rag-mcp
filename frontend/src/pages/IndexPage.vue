@@ -29,6 +29,7 @@
           :groups="groups"
           :selected-group-id="selectedGroupId"
           :busy="actionBusy"
+          :llm-configs="llmConfigs"
           @refresh="loadWorkspace"
           @select-group="selectGroup"
           @create-group="createWorkspaceGroup"
@@ -60,6 +61,14 @@
           @search="runSearch"
         />
 
+        <llm-config-panel
+          v-else-if="currentSection === 'llm'"
+          :configs="llmConfigs"
+          :busy="actionBusy"
+          @create-config="createWorkspaceLlmConfig"
+          @delete-config="deleteWorkspaceLlmConfig"
+        />
+
         <api-keys-panel
           v-else
           :api-keys="apiKeys"
@@ -87,6 +96,7 @@ import DashboardPanel from '@/components/dashboard/DashboardPanel.vue';
 import DocumentsPanel from '@/components/documents/DocumentsPanel.vue';
 import DocumentGroupsPanel from '@/components/groups/DocumentGroupsPanel.vue';
 import ApiKeysPanel from '@/components/keys/ApiKeysPanel.vue';
+import LlmConfigPanel from '@/components/llm/LlmConfigPanel.vue';
 import SearchPanel from '@/components/search/SearchPanel.vue';
 import { useWorkspace } from '@/composables/useWorkspace';
 import { useSessionStore } from '@/stores/session-store';
@@ -104,6 +114,7 @@ const {
   documents,
   jobs,
   apiKeys,
+  llmConfigs,
   searchResults,
   selectedGroupId,
   selectedGroup,
@@ -127,6 +138,8 @@ const {
   runSearch,
   createWorkspaceApiKey,
   revokeWorkspaceApiKey,
+  createWorkspaceLlmConfig,
+  deleteWorkspaceLlmConfig,
   clearFeedback,
   clearCreatedKey,
 } = useWorkspace(session);
@@ -136,6 +149,7 @@ const currentSection = computed<WorkspaceSection>(() => {
   return section === 'groups' ||
     section === 'documents' ||
     section === 'search' ||
+    section === 'llm' ||
     section === 'keys'
     ? section
     : 'dashboard';

@@ -3,13 +3,16 @@ import { computed, ref } from 'vue';
 import {
   createApiKey,
   createGroup,
+  createLlmConfig,
   createTextDocument,
   deleteDocument,
   deleteGroup,
+  deleteLlmConfig,
   getJob,
   listApiKeys,
   listDocuments,
   listGroups,
+  listLlmConfigs,
   revokeApiKey,
   searchDocuments,
   updateDocument,
@@ -18,7 +21,11 @@ import {
   type ApiKey,
   type DocumentGroup,
   type DocumentItem,
+  type LlmProvider,
+  type LlmConfigType,
+  type LlmProviderConfig,
   type ProcessingJob,
+  type SearchOptions,
   type SearchResult,
 } from '@/services/api';
 import type { useSessionStore } from '@/stores/session-store';
@@ -31,6 +38,7 @@ export function useWorkspace(session: SessionStore) {
   const documents = ref<DocumentItem[]>([]);
   const jobs = ref<ProcessingJob[]>([]);
   const apiKeys = ref<ApiKey[]>([]);
+  const llmConfigs = ref<LlmProviderConfig[]>([]);
   const searchResults = ref<SearchResult[]>([]);
   const selectedGroupId = ref<string | null>(null);
   const createdKey = ref('');
@@ -69,7 +77,7 @@ export function useWorkspace(session: SessionStore) {
       if (!selectedGroupId.value && groups.value[0]) {
         selectedGroupId.value = groups.value[0].id;
       }
-      await Promise.all([loadDocuments(), loadApiKeys()]);
+      await Promise.all([loadDocuments(), loadApiKeys(), loadLlmConfigs()]);
     } catch (error) {
       setError(error);
     } finally {
@@ -90,7 +98,11 @@ export function useWorkspace(session: SessionStore) {
     documents.value = await listDocuments(session.token, selectedGroupId.value);
   }
 
-  async function createWorkspaceGroup(payload: { name: string; description?: string | null }) {
+  async function createWorkspaceGroup(payload: {
+    name: string;
+    description?: string | null;
+    llm_config_id: string;
+  }) {
     if (!session.token || !payload.name.trim()) return;
     clearFeedback();
     actionBusy.value = true;
@@ -228,14 +240,14 @@ export function useWorkspace(session: SessionStore) {
     }
   }
 
-  async function runSearch(query: string) {
+  async function runSearch(query: string, options: SearchOptions = {}) {
     if (!session.token || !query.trim()) return;
     clearFeedback();
     actionBusy.value = true;
     try {
-      const payload: { query: string; group_ids?: string[]; limit?: number } = {
+      const payload: { query: string; group_ids?: string[] } & SearchOptions = {
         query,
-        limit: 8,
+        ...options,
       };
       if (selectedGroupId.value) {
         payload.group_ids = [selectedGroupId.value];
@@ -252,6 +264,49 @@ export function useWorkspace(session: SessionStore) {
   async function loadApiKeys() {
     if (!session.token) return;
     apiKeys.value = await listApiKeys(session.token);
+  }
+
+  async function loadLlmConfigs() {
+    if (!session.token) return;
+    llmConfigs.value = await listLlmConfigs(session.token);
+  }
+
+  async function createWorkspaceLlmConfig(payload: {
+    name: string;
+    provider: LlmProvider;
+    config_type: LlmConfigType;
+    api_key: string;
+    base_url?: string | null;
+    embedding_model?: string | null;
+    chat_model?: string | null;
+  }) {
+    if (!session.token || !payload.name.trim() || !payload.api_key.trim()) return;
+    clearFeedback();
+    actionBusy.value = true;
+    try {
+      const config = await createLlmConfig(session.token, payload);
+      llmConfigs.value = [config, ...llmConfigs.value];
+      statusMessage.value = 'LLM provider config saved with encrypted API key.';
+    } catch (error) {
+      setError(error);
+    } finally {
+      actionBusy.value = false;
+    }
+  }
+
+  async function deleteWorkspaceLlmConfig(configId: string) {
+    if (!session.token) return;
+    clearFeedback();
+    actionBusy.value = true;
+    try {
+      const config = await deleteLlmConfig(session.token, configId);
+      llmConfigs.value = llmConfigs.value.filter((item) => item.id !== config.id);
+      statusMessage.value = 'LLM provider config deleted.';
+    } catch (error) {
+      setError(error);
+    } finally {
+      actionBusy.value = false;
+    }
   }
 
   async function createWorkspaceApiKey(payload: { name: string; group_id: string }) {
@@ -322,6 +377,7 @@ export function useWorkspace(session: SessionStore) {
     documents,
     jobs,
     apiKeys,
+    llmConfigs,
     searchResults,
     selectedGroupId,
     selectedGroup,
@@ -347,6 +403,8 @@ export function useWorkspace(session: SessionStore) {
     runSearch,
     createWorkspaceApiKey,
     revokeWorkspaceApiKey,
+    createWorkspaceLlmConfig,
+    deleteWorkspaceLlmConfig,
     clearFeedback,
     clearCreatedKey,
   };

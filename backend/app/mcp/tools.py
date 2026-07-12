@@ -58,6 +58,12 @@ def search_documents_tool(
     access: McpAccessContext,
     query: str,
     limit: int = 5,
+    candidate_limit: int | None = None,
+    rerank: bool | None = None,
+    lexical_weight: float | None = None,
+    diversity: bool | None = None,
+    diversity_lambda: float | None = None,
+    min_score: float | None = None,
 ) -> dict[str, Any]:
     group_id = _scoped_group_id(session, access)
     results = search_documents(
@@ -68,6 +74,12 @@ def search_documents_tool(
         group_ids=[group_id],
         limit=limit,
         owner_id=access.user_id,
+        candidate_limit=candidate_limit,
+        rerank=rerank,
+        lexical_weight=lexical_weight,
+        diversity=diversity,
+        diversity_lambda=diversity_lambda,
+        min_score=min_score,
     )
     return {
         "query": query,

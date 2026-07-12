@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.llm_configs import LlmProviderConfig
 
 
 def new_id() -> str:
@@ -24,6 +28,9 @@ class DocumentGroup(Base):
     owner_id: Mapped[str] = mapped_column(String(80), index=True, default="local")
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_config_id: Mapped[str | None] = mapped_column(
+        ForeignKey("llm_provider_configs.id", ondelete="RESTRICT"), index=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -35,6 +42,13 @@ class DocumentGroup(Base):
         back_populates="group",
         cascade="all, delete-orphan",
     )
+    llm_config: Mapped[LlmProviderConfig | None] = relationship(
+        back_populates="document_groups"
+    )
+
+    @property
+    def llm_config_name(self) -> str | None:
+        return self.llm_config.name if self.llm_config is not None else None
 
 
 class Document(Base):

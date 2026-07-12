@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class DocumentGroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
+    llm_config_id: str | None = None
 
 
 class DocumentGroupUpdate(BaseModel):
@@ -21,6 +22,8 @@ class DocumentGroupRead(BaseModel):
     owner_id: str
     name: str
     description: str | None
+    llm_config_id: str | None
+    llm_config_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -74,6 +77,12 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
     group_ids: list[str] | None = None
     limit: int = Field(default=5, ge=1, le=25)
+    candidate_limit: int | None = Field(default=None, ge=1, le=100)
+    rerank: bool | None = None
+    lexical_weight: float | None = Field(default=None, ge=0, le=1)
+    diversity: bool | None = None
+    diversity_lambda: float | None = Field(default=None, ge=0, le=1)
+    min_score: float | None = Field(default=None, ge=0, le=1)
 
 
 class SearchResult(BaseModel):
@@ -82,6 +91,8 @@ class SearchResult(BaseModel):
     group_id: str
     text: str
     score: float
+    vector_score: float | None = None
+    lexical_score: float | None = None
     metadata: dict[str, Any]
 
 
