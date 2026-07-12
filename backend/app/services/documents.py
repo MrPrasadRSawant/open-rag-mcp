@@ -1,0 +1,425 @@
+from typing import Any
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.core.config import Settings
+from app.models import Document, DocumentChunk, DocumentGroup, ProcessingJob
+from app.schemas.documents import DocumentCreate, SearchResult
+from app.services.embeddings import get_embedding_service
+from app.services.text_splitter import TextSplitter
+from app.services.vector_store.base import VectorDocument, VectorStore
+
+
+def create_document_group(
+    session: Session,
+    *,
+    name: str,
+    description: str | None = None,
+    owner_id: str = "local",
+) -> DocumentGroup:
+    group = DocumentGroup(name=name, description=description, owner_id=owner_id)
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group
+
+
+def list_document_groups(session: Session, *, owner_id: str = "local") -> list[DocumentGroup]:
+    return list(
+        session.scalars(
+            select(DocumentGroup)
+            .where(DocumentGroup.owner_id == owner_id)
+            .order_by(DocumentGroup.created_at.desc())
+        )
+    )
+
+
+def get_document_group(
+    session: Session,
+    *,
+    group_id: str,
+    owner_id: str = "local",
+) -> DocumentGroup | None:
+    return session.scalar(
+        select(DocumentGroup).where(
+            DocumentGroup.id == group_id,
+            DocumentGroup.owner_id == owner_id,
+        )
+    )
+
+
+def update_document_group(
+    session: Session,
+    *,
+    group_id: str,
+    owner_id: str,
+    name: str | None = None,
+    description: str | None = None,
+) -> DocumentGroup | None:
+    group = get_document_group(session, group_id=group_id, owner_id=owner_id)
+    if group is None:
+        return None
+    if name is not None:
+        group.name = name
+    group.description = description
+    session.commit()
+    session.refresh(group)
+    return group
+
+
+def delete_document_group(
+    session: Session,
+    *,
+    group_id: str,
+    owner_id: str,
+) -> bool:
+    group = get_document_group(session, group_id=group_id, owner_id=owner_id)
+    if group is None:
+        return False
+    session.delete(group)
+    session.commit()
+    return True
+
+
+def get_document(
+    session: Session,
+    *,
+    document_id: str,
+    group_id: str,
+    owner_id: str = "local",
+) -> Document | None:
+    return session.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.group_id == group_id,
+            Document.owner_id == owner_id,
+        )
+    )
+
+
+def update_document(
+    session: Session,
+    *,
+    document_id: str,
+    group_id: str,
+    owner_id: str,
+    title: str | None = None,
+) -> Document | None:
+    document = get_document(
+        session,
+        document_id=document_id,
+        group_id=group_id,
+        owner_id=owner_id,
+    )
+    if document is None:
+        return None
+    if title is not None:
+        document.title = title
+    session.commit()
+    session.refresh(document)
+    return document
+
+
+def delete_document(
+    session: Session,
+    *,
+    document_id: str,
+    group_id: str,
+    owner_id: str,
+) -> bool:
+    document = get_document(
+        session,
+        document_id=document_id,
+        group_id=group_id,
+        owner_id=owner_id,
+    )
+    if document is None:
+        return False
+    session.delete(document)
+    session.commit()
+    return True
+
+
+def list_documents(
+    session: Session,
+    *,
+    group_id: str,
+    owner_id: str = "local",
+) -> list[Document]:
+    return list(
+        session.scalars(
+            select(Document)
+            .where(
+                Document.group_id == group_id,
+                Document.owner_id == owner_id,
+            )
+            .order_by(Document.created_at.desc())
+        )
+    )
+
+
+def ingest_text_document(
+    session: Session,
+    *,
+    vector_store: VectorStore,
+    settings: Settings,
+    group_id: str,
+    payload: DocumentCreate,
+    owner_id: str = "local",
+) -> Document:
+    group = get_document_group(session, group_id=group_id, owner_id=owner_id)
+    if group is None:
+        raise ValueError("document group not found")
+
+    document = Document(
+        owner_id=owner_id,
+        group_id=group.id,
+        title=payload.title,
+        source_name=payload.source_name,
+        content_type=payload.content_type,
+        status="processing",
+        extra_metadata=payload.metadata,
+    )
+    session.add(document)
+    session.flush()
+
+    index_document_text(
+        session,
+        vector_store=vector_store,
+        settings=settings,
+        document=document,
+        text=payload.text,
+        metadata=payload.metadata,
+    )
+    session.refresh(document)
+    return document
+
+
+def create_queued_text_document(
+    session: Session,
+    *,
+    group_id: str,
+    payload: DocumentCreate,
+    owner_id: str,
+) -> tuple[Document, ProcessingJob]:
+    group = get_document_group(session, group_id=group_id, owner_id=owner_id)
+    if group is None:
+        raise ValueError("document group not found")
+
+    document = Document(
+        owner_id=owner_id,
+        group_id=group.id,
+        title=payload.title,
+        source_name=payload.source_name,
+        content_type=payload.content_type,
+        status="queued",
+        extra_metadata=payload.metadata,
+    )
+    session.add(document)
+    session.flush()
+
+    job = ProcessingJob(
+        owner_id=owner_id,
+        document_id=document.id,
+        job_type="text_ingestion",
+        status="queued",
+        payload={"text": payload.text, "metadata": payload.metadata},
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(document)
+    session.refresh(job)
+    return document, job
+
+
+def create_queued_upload_document(
+    session: Session,
+    *,
+    group_id: str,
+    owner_id: str,
+    title: str,
+    source_name: str,
+    content_type: str,
+    storage_path: str,
+    file_size_bytes: int,
+) -> tuple[Document, ProcessingJob]:
+    group = get_document_group(session, group_id=group_id, owner_id=owner_id)
+    if group is None:
+        raise ValueError("document group not found")
+
+    metadata = {
+        "original_filename": source_name,
+        "storage_path": storage_path,
+        "file_size_bytes": file_size_bytes,
+    }
+    document = Document(
+        owner_id=owner_id,
+        group_id=group.id,
+        title=title,
+        source_name=source_name,
+        content_type=content_type,
+        status="queued",
+        extra_metadata=metadata,
+    )
+    session.add(document)
+    session.flush()
+
+    job = ProcessingJob(
+        owner_id=owner_id,
+        document_id=document.id,
+        job_type="upload_ingestion",
+        status="queued",
+        payload={
+            "storage_path": storage_path,
+            "content_type": content_type,
+            "metadata": metadata,
+        },
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(document)
+    session.refresh(job)
+    return document, job
+
+
+def index_document_text(
+    session: Session,
+    *,
+    vector_store: VectorStore,
+    settings: Settings,
+    document: Document,
+    text: str,
+    metadata: dict[str, Any],
+) -> Document:
+    splitter = TextSplitter(settings.chunk_size, settings.chunk_overlap)
+    embedding_service = get_embedding_service(settings)
+    chunks = splitter.split(text)
+    if not chunks:
+        raise ValueError("document text did not contain indexable content")
+
+    document.status = "processing"
+    document.error_message = None
+    session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+    session.flush()
+
+    chunk_models = [
+        DocumentChunk(
+            owner_id=document.owner_id,
+            group_id=document.group_id,
+            document_id=document.id,
+            chunk_index=index,
+            text=chunk_text,
+            token_count=len(chunk_text.split()),
+        )
+        for index, chunk_text in enumerate(chunks)
+    ]
+    session.add_all(chunk_models)
+    session.flush()
+
+    vector_documents = [
+        VectorDocument(
+            id=chunk.id,
+            text=chunk.text,
+            embedding=embedding_service.embed_document(chunk.text),
+            metadata=_clean_metadata(
+                {
+                    "owner_id": document.owner_id,
+                    "group_id": document.group_id,
+                    "document_id": document.id,
+                    "chunk_id": chunk.id,
+                    "chunk_index": chunk.chunk_index,
+                    "title": document.title,
+                    **metadata,
+                }
+            ),
+        )
+        for chunk in chunk_models
+    ]
+
+    vector_store.add_documents(vector_documents)
+
+    document.status = "processed"
+    session.commit()
+    session.refresh(document)
+    return document
+
+
+def search_documents(
+    *,
+    session: Session,
+    vector_store: VectorStore,
+    settings: Settings,
+    query: str,
+    group_ids: list[str] | None = None,
+    limit: int = 5,
+    owner_id: str = "local",
+) -> list[SearchResult]:
+    embedding_service = get_embedding_service(settings)
+    metadata_filter: dict[str, str | int | float | bool | None] = {"owner_id": owner_id}
+    if group_ids and len(group_ids) == 1:
+        metadata_filter["group_id"] = group_ids[0]
+
+    vector_results = vector_store.search(
+        embedding_service.embed_query(query),
+        limit=limit,
+        metadata_filter=metadata_filter,
+    )
+
+    filtered_results = []
+    for result in vector_results:
+        if group_ids and result.metadata.get("group_id") not in group_ids:
+            continue
+        document_id = str(result.metadata.get("document_id", ""))
+        group_id = str(result.metadata.get("group_id", ""))
+        if not document_id or not group_id:
+            continue
+        if get_document(
+            session,
+            document_id=document_id,
+            group_id=group_id,
+            owner_id=owner_id,
+        ) is None:
+            continue
+        filtered_results.append(
+            SearchResult(
+                chunk_id=str(result.metadata.get("chunk_id", result.id)),
+                document_id=document_id,
+                group_id=group_id,
+                text=result.text,
+                score=result.score,
+                metadata=result.metadata,
+            )
+        )
+
+    return filtered_results[:limit]
+
+
+def document_with_chunk_count(
+    document: Document,
+    *,
+    processing_job_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": document.id,
+        "owner_id": document.owner_id,
+        "group_id": document.group_id,
+        "title": document.title,
+        "source_name": document.source_name,
+        "content_type": document.content_type,
+        "status": document.status,
+        "error_message": document.error_message,
+        "extra_metadata": document.extra_metadata,
+        "created_at": document.created_at,
+        "updated_at": document.updated_at,
+        "chunk_count": len(document.chunks),
+        "processing_job_id": processing_job_id,
+    }
+
+
+def _clean_metadata(metadata: dict[str, Any]) -> dict[str, str | int | float | bool]:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if isinstance(value, str | int | float | bool)
+    }
