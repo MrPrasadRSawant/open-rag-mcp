@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Widget Test</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #17202f;
+        background: #f4f7fb;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px max(24px, calc((100vw - 1100px) / 2));
+        border-bottom: 1px solid #dce3ec;
+        background: #ffffff;
+      }
+      .brand { font-weight: 800; }
+      .nav { display: flex; gap: 22px; color: #667085; font-size: 14px; }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+        gap: 64px;
+        align-items: center;
+        width: min(1100px, calc(100% - 48px));
+        min-height: calc(100vh - 70px);
+        margin: 0 auto;
+      }
+      h1 { max-width: 680px; margin: 0; font-size: clamp(40px, 6vw, 72px); line-height: 1.04; }
+      p { max-width: 620px; color: #667085; font-size: 18px; line-height: 1.65; }
+      .preview {
+        min-height: 360px;
+        padding: 28px;
+        border: 1px solid #dce3ec;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+      .preview strong { display: block; margin-bottom: 12px; }
+      .line { height: 10px; margin: 12px 0; border-radius: 3px; background: #e7ecf3; }
+      .line.short { width: 64%; }
+      @media (max-width: 760px) {
+        .nav { display: none; }
+        main { grid-template-columns: 1fr; gap: 28px; padding: 52px 0 120px; }
+        .preview { min-height: 220px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">Example Website</div>
+      <nav class="nav"><span>Product</span><span>Documentation</span><span>Contact</span></nav>
+    </header>
+    <main>
+      <section>
+        <h1>Embedded agent widget test</h1>
+        <p>
+          This represents a customer website. Use the floating button in the bottom-right corner to
+          open the document-group agent and test streamed responses.
+        </p>
+      </section>
+      <section class="preview" aria-hidden="true">
+        <strong>Customer application content</strong>
+        <div class="line"></div><div class="line"></div><div class="line short"></div>
+      </section>
+    </main>
+
+    <script src="http://localhost:8000/agent-runtime/sdk.js"></script>
+    <script>
+      OpenRagAgent.init({
+        publicKey: "pk_agent_SiH_CEFL8mv9hQnddXbe_toNf4EGBhd9",
+        baseUrl: window.location.origin,
+        title: "Knowledge Agent",
+      });
+    </script>
+  </body>
+</html>

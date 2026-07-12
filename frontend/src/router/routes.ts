@@ -36,7 +36,8 @@ const routes: RouteRecordRaw[] = [
         meta: { section: 'llm' },
       },
       {
-        path: 'api-keys',
+        path: 'ai-agent',
+        alias: 'api-keys',
         name: 'keys',
         component: () => import('@/pages/IndexPage.vue'),
         meta: { section: 'keys' },

@@ -2,23 +2,29 @@ import { computed, ref } from 'vue';
 
 import {
   createApiKey,
+  createAgent,
   createGroup,
   createLlmConfig,
   createTextDocument,
   deleteDocument,
+  deleteAgent,
   deleteGroup,
   deleteLlmConfig,
   getJob,
   listApiKeys,
+  listAgents,
   listDocuments,
   listGroups,
   listLlmConfigs,
   revokeApiKey,
   searchDocuments,
   updateDocument,
+  updateAgent,
   updateGroup,
   uploadDocument,
   type ApiKey,
+  type AgentPayload,
+  type AgentProfile,
   type DocumentGroup,
   type DocumentItem,
   type LlmProvider,
@@ -38,6 +44,7 @@ export function useWorkspace(session: SessionStore) {
   const documents = ref<DocumentItem[]>([]);
   const jobs = ref<ProcessingJob[]>([]);
   const apiKeys = ref<ApiKey[]>([]);
+  const agents = ref<AgentProfile[]>([]);
   const llmConfigs = ref<LlmProviderConfig[]>([]);
   const searchResults = ref<SearchResult[]>([]);
   const selectedGroupId = ref<string | null>(null);
@@ -77,7 +84,7 @@ export function useWorkspace(session: SessionStore) {
       if (!selectedGroupId.value && groups.value[0]) {
         selectedGroupId.value = groups.value[0].id;
       }
-      await Promise.all([loadDocuments(), loadApiKeys(), loadLlmConfigs()]);
+      await Promise.all([loadDocuments(), loadApiKeys(), loadLlmConfigs(), loadAgents()]);
     } catch (error) {
       setError(error);
     } finally {
@@ -266,6 +273,56 @@ export function useWorkspace(session: SessionStore) {
     apiKeys.value = await listApiKeys(session.token);
   }
 
+  async function loadAgents() {
+    if (!session.token) return;
+    agents.value = await listAgents(session.token);
+  }
+
+  async function createWorkspaceAgent(payload: AgentPayload) {
+    if (!session.token) return;
+    clearFeedback();
+    actionBusy.value = true;
+    try {
+      const agent = await createAgent(session.token, payload);
+      agents.value = [agent, ...agents.value];
+      statusMessage.value = 'AI agent created.';
+    } catch (error) {
+      setError(error);
+    } finally {
+      actionBusy.value = false;
+    }
+  }
+
+  async function updateWorkspaceAgent(agentId: string, payload: Partial<AgentProfile>) {
+    if (!session.token) return;
+    clearFeedback();
+    actionBusy.value = true;
+    try {
+      const agent = await updateAgent(session.token, agentId, payload);
+      agents.value = agents.value.map((item) => (item.id === agent.id ? agent : item));
+      statusMessage.value = 'AI agent updated.';
+    } catch (error) {
+      setError(error);
+    } finally {
+      actionBusy.value = false;
+    }
+  }
+
+  async function deleteWorkspaceAgent(agentId: string) {
+    if (!session.token) return;
+    clearFeedback();
+    actionBusy.value = true;
+    try {
+      const agent = await deleteAgent(session.token, agentId);
+      agents.value = agents.value.filter((item) => item.id !== agent.id);
+      statusMessage.value = 'AI agent deleted.';
+    } catch (error) {
+      setError(error);
+    } finally {
+      actionBusy.value = false;
+    }
+  }
+
   async function loadLlmConfigs() {
     if (!session.token) return;
     llmConfigs.value = await listLlmConfigs(session.token);
@@ -316,8 +373,7 @@ export function useWorkspace(session: SessionStore) {
     try {
       const key = await createApiKey(session.token, payload);
       createdKey.value = key.api_key;
-      statusMessage.value =
-        'Document-group scoped MCP key created. Copy it now; it is shown only once.';
+      statusMessage.value = 'Group-scoped API key created. Copy it now; it is shown only once.';
       await loadApiKeys();
     } catch (error) {
       setError(error);
@@ -377,6 +433,7 @@ export function useWorkspace(session: SessionStore) {
     documents,
     jobs,
     apiKeys,
+    agents,
     llmConfigs,
     searchResults,
     selectedGroupId,
@@ -402,6 +459,9 @@ export function useWorkspace(session: SessionStore) {
     deleteWorkspaceDocument,
     runSearch,
     createWorkspaceApiKey,
+    createWorkspaceAgent,
+    updateWorkspaceAgent,
+    deleteWorkspaceAgent,
     revokeWorkspaceApiKey,
     createWorkspaceLlmConfig,
     deleteWorkspaceLlmConfig,

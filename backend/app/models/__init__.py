@@ -1,3 +1,4 @@
+from app.models.agents import AgentProfile
 from app.models.api_keys import ApiKey
 from app.models.base import Base
 from app.models.documents import Document, DocumentChunk, DocumentGroup
@@ -7,6 +8,7 @@ from app.models.users import User
 
 __all__ = [
     "ApiKey",
+    "AgentProfile",
     "Base",
     "Document",
     "DocumentChunk",

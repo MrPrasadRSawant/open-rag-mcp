@@ -69,15 +69,20 @@
           @delete-config="deleteWorkspaceLlmConfig"
         />
 
-        <api-keys-panel
+        <ai-agents-panel
           v-else
+          :agents="agents"
           :api-keys="apiKeys"
+          :llm-configs="llmConfigs"
           :group-options="groupOptions"
           :selected-group-id="selectedGroupId"
           :created-key="createdKey"
           :busy="actionBusy"
           @select-group="selectGroup"
           @create-key="createWorkspaceApiKey"
+          @create-agent="createWorkspaceAgent"
+          @update-agent="updateWorkspaceAgent"
+          @delete-agent="deleteWorkspaceAgent"
           @revoke-key="revokeWorkspaceApiKey"
           @clear-created-key="clearCreatedKey"
         />
@@ -95,7 +100,7 @@ import FeedbackBanner from '@/components/common/FeedbackBanner.vue';
 import DashboardPanel from '@/components/dashboard/DashboardPanel.vue';
 import DocumentsPanel from '@/components/documents/DocumentsPanel.vue';
 import DocumentGroupsPanel from '@/components/groups/DocumentGroupsPanel.vue';
-import ApiKeysPanel from '@/components/keys/ApiKeysPanel.vue';
+import AiAgentsPanel from '@/components/agents/AiAgentsPanel.vue';
 import LlmConfigPanel from '@/components/llm/LlmConfigPanel.vue';
 import SearchPanel from '@/components/search/SearchPanel.vue';
 import { useWorkspace } from '@/composables/useWorkspace';
@@ -114,6 +119,7 @@ const {
   documents,
   jobs,
   apiKeys,
+  agents,
   llmConfigs,
   searchResults,
   selectedGroupId,
@@ -137,6 +143,9 @@ const {
   deleteWorkspaceDocument,
   runSearch,
   createWorkspaceApiKey,
+  createWorkspaceAgent,
+  updateWorkspaceAgent,
+  deleteWorkspaceAgent,
   revokeWorkspaceApiKey,
   createWorkspaceLlmConfig,
   deleteWorkspaceLlmConfig,

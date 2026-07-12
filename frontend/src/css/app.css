@@ -435,6 +435,74 @@ body {
   gap: 6px;
 }
 
+.integration-panel {
+  overflow: hidden;
+}
+
+.integration-tabs {
+  margin-top: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.integration-value {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.integration-value > div {
+  display: grid;
+  min-width: 0;
+}
+
+.integration-value span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.integration-value code,
+.inline-copy code {
+  overflow-wrap: anywhere;
+}
+
+.integration-code {
+  max-width: 100%;
+  margin: 14px 0 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f6f8fb;
+  white-space: pre-wrap;
+}
+
+.inline-copy {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 300px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.inline-copy code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-key-list {
+  margin: 14px -8px -8px;
+}
+
 .table-heading {
   padding: 8px 8px 12px;
 }

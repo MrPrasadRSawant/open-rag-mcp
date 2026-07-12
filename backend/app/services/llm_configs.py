@@ -94,6 +94,10 @@ def delete_llm_provider_config(
         raise ValueError("The internal Default config cannot be deleted")
     if count_config_groups(session, config_id=config.id, user_id=user_id):
         raise ValueError("Delete the document groups using this config first")
+    from app.services.agents import count_config_agents
+
+    if count_config_agents(session, config_id=config.id, user_id=user_id):
+        raise ValueError("Delete the AI agents using this config first")
     session.delete(config)
     session.commit()
     return config

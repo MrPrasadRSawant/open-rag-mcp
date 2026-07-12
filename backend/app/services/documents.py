@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.models import (
+    AgentProfile,
     ApiKey,
     Document,
     DocumentChunk,
@@ -123,6 +124,10 @@ def delete_document_group(
     api_keys_deleted = session.query(ApiKey).filter(
         ApiKey.group_id == group_id,
         ApiKey.user_id == owner_id,
+    ).delete(synchronize_session=False)
+    session.query(AgentProfile).filter(
+        AgentProfile.group_id == group_id,
+        AgentProfile.user_id == owner_id,
     ).delete(synchronize_session=False)
 
     if document_ids:

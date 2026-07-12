@@ -3,7 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.agent_cors import PublicAgentCorsMiddleware
 from app.api.router import api_router
+from app.api.routes.agent_runtime import agent_test_page
 from app.core.config import Settings, get_settings
 from app.core.database import init_database
 from app.mcp.server import create_mcp_server
@@ -36,7 +38,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=settings.exposed_cors_headers,
         max_age=settings.cors_max_age,
     )
+    app.add_middleware(PublicAgentCorsMiddleware, settings=settings)
     app.include_router(api_router)
+    app.add_api_route("/test-web", agent_test_page, include_in_schema=False)
     app.mount("/mcp", mcp_http_app)
     return app
 

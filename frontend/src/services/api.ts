@@ -132,6 +132,32 @@ export type LlmProviderConfig = {
   updated_at: string;
 };
 
+export type AgentProfile = {
+  id: string;
+  user_id: string;
+  group_id: string;
+  llm_config_id: string;
+  name: string;
+  instructions: string;
+  public_key: string;
+  allowed_origins: string[];
+  history_enabled: boolean;
+  num_history_runs: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentPayload = {
+  name: string;
+  group_id: string;
+  llm_config_id: string;
+  instructions: string;
+  allowed_origins: string[];
+  history_enabled: boolean;
+  num_history_runs: number;
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 type JsonBody = unknown;
@@ -298,6 +324,40 @@ export async function revokeApiKey(token: string, apiKeyId: string): Promise<Api
     method: 'DELETE',
     token,
   });
+}
+
+export async function listAgents(token: string): Promise<AgentProfile[]> {
+  return request<AgentProfile[]>('/agents', { token });
+}
+
+export async function createAgent(token: string, payload: AgentPayload): Promise<AgentProfile> {
+  return request<AgentProfile>('/agents', { method: 'POST', token, body: payload });
+}
+
+export async function updateAgent(
+  token: string,
+  agentId: string,
+  payload: Partial<
+    Pick<
+      AgentProfile,
+      | 'name'
+      | 'instructions'
+      | 'allowed_origins'
+      | 'history_enabled'
+      | 'num_history_runs'
+      | 'is_active'
+    >
+  >,
+): Promise<AgentProfile> {
+  return request<AgentProfile>(`/agents/${agentId}`, {
+    method: 'PATCH',
+    token,
+    body: payload,
+  });
+}
+
+export async function deleteAgent(token: string, agentId: string): Promise<AgentProfile> {
+  return request<AgentProfile>(`/agents/${agentId}`, { method: 'DELETE', token });
 }
 
 export async function listLlmConfigs(token: string): Promise<LlmProviderConfig[]> {

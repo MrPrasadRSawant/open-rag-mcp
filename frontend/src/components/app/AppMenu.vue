@@ -68,9 +68,9 @@ const navItems = [
   },
   {
     name: 'keys',
-    label: 'Connect To MCP',
-    caption: 'API key and setup guide',
-    icon: 'hub',
+    label: 'Setup AI Agent',
+    caption: 'Agents and integrations',
+    icon: 'smart_toy',
   },
 ];
 </script>
