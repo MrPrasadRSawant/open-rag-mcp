@@ -205,6 +205,24 @@ export type AgentCitation = {
   score: number | null;
 };
 
+export type DocumentationPage = {
+  slug: string;
+  title: string;
+  category: string;
+  order: number;
+  content: string;
+};
+
+export type DocumentationCategory = {
+  key: string;
+  label: string;
+  pages: DocumentationPage[];
+};
+
+export type DocumentationCatalog = {
+  categories: DocumentationCategory[];
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-open-rag-mcp.prasadsawant.com';
 
 type JsonBody = unknown;
@@ -242,6 +260,10 @@ export async function getProfile(token: string): Promise<User> {
 
 export async function getHealth(): Promise<{ status: string }> {
   return request<{ status: string }>('/health');
+}
+
+export async function getDocumentation(token: string): Promise<DocumentationCatalog> {
+  return request<DocumentationCatalog>('/documentation', { token });
 }
 
 export async function listGroups(token: string): Promise<DocumentGroup[]> {

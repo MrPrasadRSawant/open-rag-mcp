@@ -9,6 +9,7 @@ from app.api.routes.agent_runtime import agent_test_page
 from app.core.config import Settings, get_settings
 from app.core.database import init_database
 from app.mcp.server import create_mcp_server
+from app.services.documentation import load_documentation_cache
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -19,6 +20,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        load_documentation_cache()
         async with mcp_server.session_manager.run():
             yield
 

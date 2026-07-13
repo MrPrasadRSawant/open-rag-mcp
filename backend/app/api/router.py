@@ -6,6 +6,7 @@ from app.api.routes import (
     api_keys,
     auth,
     document_groups,
+    documentation,
     documents,
     health,
     jobs,
@@ -22,6 +23,7 @@ api_router.include_router(agents.router)
 api_router.include_router(agent_runtime.router)
 api_router.include_router(document_groups.router)
 api_router.include_router(documents.router)
+api_router.include_router(documentation.router)
 api_router.include_router(jobs.router)
 api_router.include_router(llm_configs.router)
 api_router.include_router(playground.router)

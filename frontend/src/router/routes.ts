@@ -48,6 +48,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/IndexPage.vue'),
         meta: { section: 'playground' },
       },
+      {
+        path: 'documentation',
+        name: 'documentation',
+        component: () => import('@/pages/IndexPage.vue'),
+        meta: { section: 'documentation' },
+      },
     ],
   },
 

@@ -88,7 +88,7 @@
         />
 
         <agent-playground-panel
-          v-else
+          v-else-if="currentSection === 'playground'"
           :agents="agents"
           :group-options="groupOptions"
           :selected-group-id="selectedGroupId"
@@ -96,6 +96,8 @@
           @select-group="selectGroup"
           @error="errorMessage = $event"
         />
+
+        <documentation-panel v-else :token="session.token || ''" @error="errorMessage = $event" />
       </main>
     </div>
   </q-page>
@@ -111,6 +113,7 @@ import DashboardPanel from '@/components/dashboard/DashboardPanel.vue';
 import DocumentsPanel from '@/components/documents/DocumentsPanel.vue';
 import DocumentGroupsPanel from '@/components/groups/DocumentGroupsPanel.vue';
 import AiAgentsPanel from '@/components/agents/AiAgentsPanel.vue';
+import DocumentationPanel from '@/components/documentation/DocumentationPanel.vue';
 import AgentPlaygroundPanel from '@/components/playground/AgentPlaygroundPanel.vue';
 import LlmConfigPanel from '@/components/llm/LlmConfigPanel.vue';
 import SearchPanel from '@/components/search/SearchPanel.vue';
@@ -172,7 +175,8 @@ const currentSection = computed<WorkspaceSection>(() => {
     section === 'search' ||
     section === 'llm' ||
     section === 'keys' ||
-    section === 'playground'
+    section === 'playground' ||
+    section === 'documentation'
     ? section
     : 'dashboard';
 });

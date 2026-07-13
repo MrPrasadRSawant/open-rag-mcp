@@ -78,5 +78,11 @@ const navItems = [
     caption: 'Chat and inspect runs',
     icon: 'forum',
   },
+  {
+    name: 'documentation',
+    label: 'Documentation',
+    caption: 'Functional and technical docs',
+    icon: 'article',
+  },
 ];
 </script>
