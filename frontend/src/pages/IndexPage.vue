@@ -70,7 +70,7 @@
         />
 
         <ai-agents-panel
-          v-else
+          v-else-if="currentSection === 'keys'"
           :agents="agents"
           :api-keys="apiKeys"
           :llm-configs="llmConfigs"
@@ -85,6 +85,16 @@
           @delete-agent="deleteWorkspaceAgent"
           @revoke-key="revokeWorkspaceApiKey"
           @clear-created-key="clearCreatedKey"
+        />
+
+        <agent-playground-panel
+          v-else
+          :agents="agents"
+          :group-options="groupOptions"
+          :selected-group-id="selectedGroupId"
+          :token="session.token || ''"
+          @select-group="selectGroup"
+          @error="errorMessage = $event"
         />
       </main>
     </div>
@@ -101,6 +111,7 @@ import DashboardPanel from '@/components/dashboard/DashboardPanel.vue';
 import DocumentsPanel from '@/components/documents/DocumentsPanel.vue';
 import DocumentGroupsPanel from '@/components/groups/DocumentGroupsPanel.vue';
 import AiAgentsPanel from '@/components/agents/AiAgentsPanel.vue';
+import AgentPlaygroundPanel from '@/components/playground/AgentPlaygroundPanel.vue';
 import LlmConfigPanel from '@/components/llm/LlmConfigPanel.vue';
 import SearchPanel from '@/components/search/SearchPanel.vue';
 import { useWorkspace } from '@/composables/useWorkspace';
@@ -151,6 +162,7 @@ const {
   deleteWorkspaceLlmConfig,
   clearFeedback,
   clearCreatedKey,
+  resetWorkspace,
 } = useWorkspace(session);
 
 const currentSection = computed<WorkspaceSection>(() => {
@@ -159,7 +171,8 @@ const currentSection = computed<WorkspaceSection>(() => {
     section === 'documents' ||
     section === 'search' ||
     section === 'llm' ||
-    section === 'keys'
+    section === 'keys' ||
+    section === 'playground'
     ? section
     : 'dashboard';
 });
@@ -176,6 +189,8 @@ watch(
   async (isAuthenticated) => {
     if (isAuthenticated) {
       await loadWorkspace();
+    } else {
+      resetWorkspace();
     }
   },
 );

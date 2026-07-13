@@ -54,6 +54,7 @@ def run_api(*, host: str, port: int, reload: bool, migrate: bool) -> None:
         host=host,
         port=port,
         reload=reload,
+        reload_dirs=[str(BACKEND_DIR), str(REPOSITORY_ROOT)] if reload else None,
     )
 
 

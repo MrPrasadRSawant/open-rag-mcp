@@ -72,5 +72,11 @@ const navItems = [
     caption: 'Agents and integrations',
     icon: 'smart_toy',
   },
+  {
+    name: 'playground',
+    label: 'Agent Playground',
+    caption: 'Chat and inspect runs',
+    icon: 'forum',
+  },
 ];
 </script>

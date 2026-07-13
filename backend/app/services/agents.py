@@ -38,6 +38,7 @@ def create_agent(session: Session, *, user_id: str, payload: AgentCreate) -> Age
         public_key=f"pk_agent_{secrets.token_urlsafe(24)}",
         allowed_origins=payload.allowed_origins,
         history_enabled=payload.history_enabled,
+        citations_enabled=payload.citations_enabled,
         num_history_runs=payload.num_history_runs,
     )
     session.add(agent)
@@ -78,6 +79,17 @@ def update_agent(
     if agent is None:
         return None
     changes = payload.model_dump(exclude_unset=True)
+    if "llm_config_id" in changes:
+        config = session.scalar(
+            select(LlmProviderConfig).where(
+                LlmProviderConfig.id == changes["llm_config_id"],
+                LlmProviderConfig.user_id == user_id,
+                LlmProviderConfig.purpose == "chat_llm",
+                LlmProviderConfig.is_active.is_(True),
+            )
+        )
+        if config is None:
+            raise ValueError("Select a valid Chat LLM config")
     if "name" in changes:
         changes["name"] = changes["name"].strip()
         duplicate = session.scalar(

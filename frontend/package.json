@@ -15,27 +15,29 @@
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {
-    "pinia": "^3.0.1",
     "@quasar/extras": "^2.0.0",
+    "dompurify": "^3.4.12",
+    "marked": "^18.0.6",
+    "pinia": "^3.0.1",
     "quasar": "^2.21.1",
     "vue": "^3.5.22",
     "vue-router": "^5.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@quasar/app-vite": "^3.0.0",
+    "@types/node": "^22.19.11",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/eslint-config-typescript": "^14.7.0",
+    "autoprefixer": "^10.4.27",
     "eslint": "^9.39.4",
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.4.0",
-    "@vue/eslint-config-typescript": "^14.7.0",
+    "prettier": "^3.8.1",
+    "typescript": "^6.0.0",
     "vite-plugin-checker": "^0.12.0",
     "vue-eslint-parser": "^10.4.0",
-    "@vue/eslint-config-prettier": "^10.2.0",
-    "prettier": "^3.8.1",
-    "vue-tsc": "^3.3.3",
-    "@types/node": "^22.19.11",
-    "@quasar/app-vite": "^3.0.0",
-    "autoprefixer": "^10.4.27",
-    "typescript": "^6.0.0"
+    "vue-tsc": "^3.3.3"
   },
   "keywords": [
     "quasar",

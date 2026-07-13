@@ -142,6 +142,7 @@ export type AgentProfile = {
   public_key: string;
   allowed_origins: string[];
   history_enabled: boolean;
+  citations_enabled: boolean;
   num_history_runs: number;
   is_active: boolean;
   created_at: string;
@@ -155,7 +156,53 @@ export type AgentPayload = {
   instructions: string;
   allowed_origins: string[];
   history_enabled: boolean;
+  citations_enabled: boolean;
   num_history_runs: number;
+};
+
+export type AgentSessionSummary = {
+  id: string;
+  name: string;
+  created_at: number | null;
+  updated_at: number | null;
+  message_count: number;
+};
+
+export type AgentHistoryMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: number | null;
+  latency: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+};
+
+export type AgentSessionDetail = AgentSessionSummary & {
+  messages: AgentHistoryMessage[];
+};
+
+export type AgentStreamEvent = {
+  event: string;
+  content?: string;
+  tool?: { tool_name?: string; tool_args?: Record<string, unknown>; result?: string };
+  message?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  duration?: number;
+  metrics?: { duration?: number; total_tokens?: number };
+  citations?: AgentCitation[];
+  enabled?: boolean;
+};
+
+export type AgentCitation = {
+  number: number;
+  label: string;
+  document_id: string;
+  chunk_id: string | null;
+  title: string;
+  excerpt: string;
+  score: number | null;
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -341,9 +388,11 @@ export async function updateAgent(
     Pick<
       AgentProfile,
       | 'name'
+      | 'llm_config_id'
       | 'instructions'
       | 'allowed_origins'
       | 'history_enabled'
+      | 'citations_enabled'
       | 'num_history_runs'
       | 'is_active'
     >
@@ -358,6 +407,104 @@ export async function updateAgent(
 
 export async function deleteAgent(token: string, agentId: string): Promise<AgentProfile> {
   return request<AgentProfile>(`/agents/${agentId}`, { method: 'DELETE', token });
+}
+
+export async function listAgentSessions(
+  token: string,
+  agentId: string,
+): Promise<AgentSessionSummary[]> {
+  return request<AgentSessionSummary[]>(`/agent-playground/agents/${agentId}/sessions`, { token });
+}
+
+export async function getAgentSession(
+  token: string,
+  agentId: string,
+  sessionId: string,
+): Promise<AgentSessionDetail> {
+  return request<AgentSessionDetail>(
+    `/agent-playground/agents/${agentId}/sessions/${encodeURIComponent(sessionId)}`,
+    { token },
+  );
+}
+
+export async function renameAgentSession(
+  token: string,
+  agentId: string,
+  sessionId: string,
+  name: string,
+): Promise<AgentSessionSummary> {
+  return request<AgentSessionSummary>(
+    `/agent-playground/agents/${agentId}/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'PATCH', token, body: { name } },
+  );
+}
+
+export async function deleteAgentSession(
+  token: string,
+  agentId: string,
+  sessionId: string,
+): Promise<void> {
+  return request<void>(
+    `/agent-playground/agents/${agentId}/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE', token },
+  );
+}
+
+export async function streamPlaygroundAgent(
+  token: string,
+  agentId: string,
+  payload: { message: string; session_id: string },
+  onEvent: (event: AgentStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const requestOptions: RequestInit = {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  };
+  if (signal) requestOptions.signal = signal;
+  const response = await fetch(
+    `${API_BASE_URL}/agent-playground/agents/${agentId}/runs`,
+    requestOptions,
+  );
+  if (!response.ok) {
+    const data: unknown = await response.json().catch(() => null);
+    const message =
+      data && typeof data === 'object' && 'detail' in data
+        ? String(data.detail)
+        : `Agent request failed with status ${response.status}`;
+    throw new ApiError(message, response.status);
+  }
+  if (!response.body) throw new ApiError('Streaming response is unavailable', 500);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop() || '';
+    for (const block of blocks) emitSseEvent(block, onEvent);
+    if (done) break;
+  }
+  emitSseEvent(buffer, onEvent);
+}
+
+function emitSseEvent(block: string, onEvent: (event: AgentStreamEvent) => void) {
+  if (!block.trim()) return;
+  let eventName = 'message';
+  const data: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) eventName = line.slice(6).trim();
+    if (line.startsWith('data:')) data.push(line.slice(5).trim());
+  }
+  if (!data.length) return;
+  try {
+    const payload = JSON.parse(data.join('\n')) as AgentStreamEvent;
+    onEvent({ ...payload, event: payload.event || eventName });
+  } catch {
+    onEvent({ event: eventName, content: data.join('\n') });
+  }
 }
 
 export async function listLlmConfigs(token: string): Promise<LlmProviderConfig[]> {

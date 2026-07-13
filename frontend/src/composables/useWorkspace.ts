@@ -78,12 +78,16 @@ export function useWorkspace(session: SessionStore) {
 
   async function loadWorkspace() {
     if (!session.token) return;
+    const requestToken = session.token;
     loading.value = true;
     try {
-      groups.value = await listGroups(session.token);
-      if (!selectedGroupId.value && groups.value[0]) {
-        selectedGroupId.value = groups.value[0].id;
-      }
+      const loadedGroups = await listGroups(requestToken);
+      if (session.token !== requestToken) return;
+      groups.value = loadedGroups;
+      const selectionBelongsToUser = groups.value.some(
+        (group) => group.id === selectedGroupId.value,
+      );
+      if (!selectionBelongsToUser) selectedGroupId.value = groups.value[0]?.id || null;
       await Promise.all([loadDocuments(), loadApiKeys(), loadLlmConfigs(), loadAgents()]);
     } catch (error) {
       setError(error);
@@ -93,8 +97,25 @@ export function useWorkspace(session: SessionStore) {
   }
 
   async function selectGroup(groupId: string) {
+    if (!groups.value.some((group) => group.id === groupId)) return;
     selectedGroupId.value = groupId;
     await loadDocuments();
+  }
+
+  function resetWorkspace() {
+    groups.value = [];
+    documents.value = [];
+    jobs.value = [];
+    apiKeys.value = [];
+    agents.value = [];
+    llmConfigs.value = [];
+    searchResults.value = [];
+    selectedGroupId.value = null;
+    createdKey.value = '';
+    errorMessage.value = '';
+    statusMessage.value = '';
+    loading.value = false;
+    actionBusy.value = false;
   }
 
   async function loadDocuments() {
@@ -102,7 +123,12 @@ export function useWorkspace(session: SessionStore) {
       documents.value = [];
       return;
     }
-    documents.value = await listDocuments(session.token, selectedGroupId.value);
+    const requestToken = session.token;
+    const requestGroupId = selectedGroupId.value;
+    const loadedDocuments = await listDocuments(requestToken, requestGroupId);
+    if (session.token === requestToken && selectedGroupId.value === requestGroupId) {
+      documents.value = loadedDocuments;
+    }
   }
 
   async function createWorkspaceGroup(payload: {
@@ -270,12 +296,16 @@ export function useWorkspace(session: SessionStore) {
 
   async function loadApiKeys() {
     if (!session.token) return;
-    apiKeys.value = await listApiKeys(session.token);
+    const requestToken = session.token;
+    const loadedApiKeys = await listApiKeys(requestToken);
+    if (session.token === requestToken) apiKeys.value = loadedApiKeys;
   }
 
   async function loadAgents() {
     if (!session.token) return;
-    agents.value = await listAgents(session.token);
+    const requestToken = session.token;
+    const loadedAgents = await listAgents(requestToken);
+    if (session.token === requestToken) agents.value = loadedAgents;
   }
 
   async function createWorkspaceAgent(payload: AgentPayload) {
@@ -325,7 +355,9 @@ export function useWorkspace(session: SessionStore) {
 
   async function loadLlmConfigs() {
     if (!session.token) return;
-    llmConfigs.value = await listLlmConfigs(session.token);
+    const requestToken = session.token;
+    const loadedConfigs = await listLlmConfigs(requestToken);
+    if (session.token === requestToken) llmConfigs.value = loadedConfigs;
   }
 
   async function createWorkspaceLlmConfig(payload: {
@@ -467,5 +499,6 @@ export function useWorkspace(session: SessionStore) {
     deleteWorkspaceLlmConfig,
     clearFeedback,
     clearCreatedKey,
+    resetWorkspace,
   };
 }

@@ -42,6 +42,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/IndexPage.vue'),
         meta: { section: 'keys' },
       },
+      {
+        path: 'agent-playground',
+        name: 'playground',
+        component: () => import('@/pages/IndexPage.vue'),
+        meta: { section: 'playground' },
+      },
     ],
   },
 

@@ -1,6 +1,10 @@
 (function (global) {
   'use strict';
 
+  const sdkBaseUrl = document.currentScript?.src
+    ? new URL(document.currentScript.src).origin
+    : global.location.origin;
+
   class OpenRagAgent {
     static init(options) {
       const widget = new OpenRagAgent(options || {});
@@ -11,7 +15,7 @@
     constructor({ publicKey, baseUrl, title = 'Knowledge Agent', greeting, position = 'right' }) {
       if (!publicKey) throw new Error('OpenRagAgent: publicKey is required');
       this.publicKey = publicKey;
-      this.baseUrl = String(baseUrl || global.location.origin).replace(/\/$/, '');
+      this.baseUrl = String(baseUrl || sdkBaseUrl).replace(/\/$/, '');
       this.title = title;
       this.greeting = greeting || 'Hello. Ask me a question about the connected documents.';
       this.position = position === 'left' ? 'left' : 'right';
@@ -65,15 +69,31 @@
       this.input.value = '';
       this.setBusy(true);
       const reply = this.addMessage('', 'agent');
+      reply._citationsEnabled = true;
       try {
         for await (const item of this.stream(message)) {
+          if (item.event === 'citation_config') {
+            reply._citationsEnabled = item.data?.enabled === true;
+            if (!reply._citationsEnabled) reply._citations = [];
+            renderReply(reply);
+          }
           if (item.event === 'RunContent' && item.data?.content) {
-            reply.textContent += String(item.data.content);
+            reply.dataset.markdown = `${reply.dataset.markdown || ''}${String(item.data.content)}`;
+            renderReply(reply);
+            this.scrollToLatest();
+          }
+          if (
+            reply._citationsEnabled &&
+            item.event === 'citations' &&
+            Array.isArray(item.data?.citations)
+          ) {
+            reply._citations = [...(reply._citations || []), ...item.data.citations];
+            renderReply(reply);
             this.scrollToLatest();
           }
           if (item.event === 'error') throw new Error(item.data?.message || 'Agent failed');
         }
-        if (!reply.textContent) reply.textContent = 'No response content was returned.';
+        if (!reply.dataset.markdown) reply.textContent = 'No response content was returned.';
         this.setStatus('Ready');
       } catch (error) {
         reply.remove();
@@ -155,6 +175,7 @@
     template() {
       const side = this.position;
       return `<style>${styles(side)}</style>
+        <style>.citations{display:block}.citations summary{display:flex;align-items:center;justify-content:space-between;color:#667085;cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase}.citations summary::after{content:'+';font-size:15px}.citations[open] summary{margin-bottom:7px}.citations[open] summary::after{content:'-'}</style>
         <button class="launcher" data-launcher aria-label="Open ${escapeHtml(this.title)} chat">✦</button>
         <section class="panel" data-panel hidden aria-label="${escapeHtml(this.title)} chat">
           <header><div><strong>${escapeHtml(this.title)}</strong><span data-status>Ready</span></div>
@@ -183,8 +204,102 @@
     return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
   }
 
+  function renderMarkdown(source) {
+    const segments = String(source).replace(/\r\n/g, '\n').split(/(```[\s\S]*?```)/g);
+    return segments
+      .map((segment) => {
+        if (segment.startsWith('```')) {
+          const match = segment.match(/^```([^\n]*)\n?([\s\S]*?)```$/);
+          const language = match?.[1]?.trim();
+          const code = match?.[2] || '';
+          return `<pre><code${language ? ` data-language="${escapeHtml(language)}"` : ''}>${escapeHtml(code)}</code></pre>`;
+        }
+        return renderMarkdownBlocks(segment);
+      })
+      .join('');
+  }
+
+  function renderReply(element) {
+    const citations = element._citationsEnabled === false ? [] : element._citations || [];
+    const answer = renderMarkdown(element.dataset.markdown || '');
+    element.innerHTML = `${answer}${renderCitations(citations)}`;
+  }
+
+  function renderCitations(citations) {
+    if (!citations.length) return '';
+    return `<details class="citations"><summary>Sources (${citations.length})</summary>${citations.map((source) => {
+      const score = Number.isFinite(source.score) ? `${Math.round(source.score * 100)}%` : '';
+      return `<article><b>${escapeHtml(source.label || `[${source.number}]`)}</b><div><strong>${escapeHtml(source.title || 'Document')}</strong><p>${escapeHtml(source.excerpt || '')}</p></div><small>${score}</small></article>`;
+    }).join('')}</details>`;
+  }
+
+  function renderMarkdownBlocks(source) {
+    const output = [];
+    const paragraph = [];
+    let listType = null;
+    const closeParagraph = () => {
+      if (paragraph.length) output.push(`<p>${inlineMarkdown(paragraph.join(' '))}</p>`);
+      paragraph.length = 0;
+    };
+    const closeList = () => {
+      if (listType) output.push(`</${listType}>`);
+      listType = null;
+    };
+
+    for (const line of source.split('\n')) {
+      const heading = line.match(/^(#{1,4})\s+(.+)$/);
+      const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+      const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+      const quote = line.match(/^>\s?(.*)$/);
+      if (!line.trim()) {
+        closeParagraph();
+        closeList();
+      } else if (heading) {
+        closeParagraph();
+        closeList();
+        const level = heading[1].length;
+        output.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      } else if (unordered || ordered) {
+        closeParagraph();
+        const nextType = unordered ? 'ul' : 'ol';
+        if (listType !== nextType) {
+          closeList();
+          listType = nextType;
+          output.push(`<${listType}>`);
+        }
+        output.push(`<li>${inlineMarkdown((unordered || ordered)[1])}</li>`);
+      } else if (quote) {
+        closeParagraph();
+        closeList();
+        output.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`);
+      } else {
+        closeList();
+        paragraph.push(line.trim());
+      }
+    }
+    closeParagraph();
+    closeList();
+    return output.join('');
+  }
+
+  function inlineMarkdown(value) {
+    const code = [];
+    let escaped = escapeHtml(value).replace(/`([^`]+)`/g, (_, content) => {
+      const token = `@@OPENRAGCODE${code.length}@@`;
+      code.push(`<code>${content}</code>`);
+      return token;
+    });
+    escaped = escaped
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      .replace(/(^|\s)\*([^*]+)\*/g, '$1<em>$2</em>')
+      .replace(/(^|\s)_([^_]+)_/g, '$1<em>$2</em>');
+    escaped = escaped.replace(/\[(\d+)]/g, '<sup class="citation-marker">[$1]</sup>');
+    return escaped.replace(/@@OPENRAGCODE(\d+)@@/g, (_, index) => code[Number(index)] || '');
+  }
+
   function styles(side) {
-    return `*{box-sizing:border-box}button,textarea{font:inherit}.launcher{position:fixed;${side}:22px;bottom:22px;z-index:2147483000;width:56px;height:56px;border:0;border-radius:50%;background:#1d4ed8;color:#fff;box-shadow:0 10px 28px rgba(29,78,216,.3);font-size:25px;cursor:pointer}.panel{position:fixed;${side}:22px;bottom:90px;z-index:2147483000;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(380px,calc(100vw - 28px));height:min(600px,calc(100vh - 120px));overflow:hidden;border:1px solid #d7dee8;border-radius:8px;background:#fff;box-shadow:0 18px 50px rgba(23,32,47,.2);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17202f}.panel[hidden]{display:none}header{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid #e3e8ef;background:#fff}header div{display:grid}header strong{font-size:15px}header span{color:#667085;font-size:11px}.error{color:#b42318!important}.close{width:32px;height:32px;border:0;background:transparent;color:#667085;font-size:24px;cursor:pointer}main{display:flex;flex-direction:column;gap:10px;min-height:0;padding:14px;overflow-y:auto;background:#f8fafc}.message{max-width:86%;padding:10px 12px;border:1px solid #dce3ec;border-radius:7px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap;font-size:14px}.message.agent{align-self:flex-start;background:#fff}.message.user{align-self:flex-end;border-color:#1d4ed8;background:#1d4ed8;color:#fff}.message.error{align-self:flex-start;border-color:#fda29b;background:#fff1f0;color:#b42318}form{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:11px;border-top:1px solid #e3e8ef;background:#fff}textarea{width:100%;min-height:40px;max-height:110px;resize:none;padding:9px 10px;border:1px solid #cfd7e3;border-radius:6px;outline:none}textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.send{height:40px;border:0;border-radius:6px;background:#1d4ed8;color:#fff;cursor:pointer}.send:disabled{opacity:.5}@media(max-width:480px){.launcher{${side}:14px;bottom:14px}.panel{${side}:7px;bottom:80px;width:calc(100vw - 14px);height:calc(100vh - 94px)}}`;
+    return `*{box-sizing:border-box}button,textarea{font:inherit}.launcher{position:fixed;${side}:22px;bottom:22px;z-index:2147483000;width:56px;height:56px;border:0;border-radius:50%;background:#1d4ed8;color:#fff;box-shadow:0 10px 28px rgba(29,78,216,.3);font-size:25px;cursor:pointer}.panel{position:fixed;${side}:22px;bottom:90px;z-index:2147483000;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(380px,calc(100vw - 28px));height:min(600px,calc(100vh - 120px));overflow:hidden;border:1px solid #d7dee8;border-radius:8px;background:#fff;box-shadow:0 18px 50px rgba(23,32,47,.2);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17202f}.panel[hidden]{display:none}header{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid #e3e8ef;background:#fff}header div{display:grid}header strong{font-size:15px}header span{color:#667085;font-size:11px}.error{color:#b42318!important}.close{width:32px;height:32px;border:0;background:transparent;color:#667085;font-size:24px;cursor:pointer}main{display:flex;flex-direction:column;gap:10px;min-height:0;padding:14px;overflow-y:auto;background:#f8fafc}.message{max-width:86%;padding:10px 12px;border:1px solid #dce3ec;border-radius:7px;line-height:1.45;overflow-wrap:anywhere;font-size:14px}.message.agent{align-self:flex-start;background:#fff}.message.user{align-self:flex-end;border-color:#1d4ed8;background:#1d4ed8;color:#fff;white-space:pre-wrap}.message.error{align-self:flex-start;border-color:#fda29b;background:#fff1f0;color:#b42318;white-space:pre-wrap}.message p{margin:0 0 9px}.message p:last-child{margin-bottom:0}.message h1,.message h2,.message h3,.message h4{margin:4px 0 8px;line-height:1.25}.message h1{font-size:18px}.message h2{font-size:17px}.message h3,.message h4{font-size:15px}.message ul,.message ol{margin:6px 0 9px;padding-left:21px}.message li{margin:3px 0}.message blockquote{margin:8px 0;padding:6px 10px;border-left:3px solid #93a4ba;background:#f6f8fb;color:#475467}.message pre{max-width:100%;margin:8px 0;padding:10px;overflow:auto;border-radius:5px;background:#17202f;color:#eef2f7;white-space:pre}.message code{padding:1px 4px;border-radius:3px;background:#eef2f7;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}.message pre code{padding:0;background:transparent;color:inherit}.citation-marker{margin-left:2px;color:#1d4ed8;font-size:10px;font-weight:800;vertical-align:super}.citations{display:grid;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid #e3e8ef}.citations>strong{color:#667085;font-size:10px;text-transform:uppercase}.citations article{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:7px;align-items:start}.citations article>b{color:#1d4ed8;font-size:11px}.citations article div{min-width:0}.citations article div>strong{display:block;font-size:11px}.citations article p{display:-webkit-box;margin:2px 0 0;overflow:hidden;color:#667085;font-size:10px;-webkit-box-orient:vertical;-webkit-line-clamp:2}.citations article small{color:#667085;font-size:10px}form{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:11px;border-top:1px solid #e3e8ef;background:#fff}textarea{width:100%;min-height:40px;max-height:110px;resize:none;padding:9px 10px;border:1px solid #cfd7e3;border-radius:6px;outline:none}textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.send{height:40px;border:0;border-radius:6px;background:#1d4ed8;color:#fff;cursor:pointer}.send:disabled{opacity:.5}@media(max-width:480px){.launcher{${side}:14px;bottom:14px}.panel{${side}:7px;bottom:80px;width:calc(100vw - 14px);height:calc(100vh - 94px)}}`;
   }
 
   global.OpenRagAgent = OpenRagAgent;

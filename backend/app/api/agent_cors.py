@@ -24,7 +24,11 @@ class PublicAgentCorsMiddleware(BaseHTTPMiddleware):
             profile = get_agent_by_public_key(session, public_key)
             allowed = profile is not None and is_origin_allowed(profile, origin)
         if not allowed:
-            return JSONResponse({"detail": "Origin not allowed"}, status_code=403)
+            return JSONResponse(
+                {"detail": f"Origin not allowed: {origin}"},
+                status_code=403,
+                headers=_cors_headers(origin),
+            )
 
         headers = _cors_headers(origin)
         if request.method == "OPTIONS":

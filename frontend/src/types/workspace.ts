@@ -1,4 +1,5 @@
-export type WorkspaceSection = 'dashboard' | 'groups' | 'documents' | 'search' | 'llm' | 'keys';
+export type WorkspaceSection =
+  'dashboard' | 'groups' | 'documents' | 'search' | 'llm' | 'keys' | 'playground';
 
 export type GroupOption = {
   label: string;

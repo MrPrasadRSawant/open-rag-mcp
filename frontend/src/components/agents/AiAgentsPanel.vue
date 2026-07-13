@@ -166,7 +166,6 @@
           <q-card-section class="dialog-form">
             <q-input v-model="form.name" label="Agent name" outlined dense autofocus />
             <q-select
-              v-if="!editingAgent"
               v-model="form.llm_config_id"
               :options="chatConfigOptions"
               emit-value
@@ -191,6 +190,7 @@
               autogrow
             />
             <q-toggle v-model="form.history_enabled" label="Use conversation history" />
+            <q-toggle v-model="form.citations_enabled" label="Show citations in answers" />
             <q-input
               v-if="form.history_enabled"
               v-model.number="form.num_history_runs"
@@ -295,6 +295,7 @@ const form = reactive({
   instructions: DEFAULT_INSTRUCTIONS,
   allowed_origins: '',
   history_enabled: true,
+  citations_enabled: true,
   num_history_runs: 5,
 });
 const columns: QTableColumn<AgentProfile>[] = [
@@ -338,7 +339,7 @@ const apiBase = stripSlash(
   import.meta.env.VITE_API_BASE_URL || window.location.origin.replace(/:9000$/, ':8000'),
 );
 const mcpEndpoint = `${apiBase}/mcp/`;
-const sdkUrl = `${apiBase}/agent-runtime/sdk.js`;
+const sdkUrl = `${apiBase}/agent-runtime/sdk.js?v=4`;
 const mcpExample = JSON.stringify(
   { url: mcpEndpoint, headers: { Authorization: 'Bearer <group API key>' } },
   null,
@@ -368,6 +369,7 @@ function openCreate() {
     instructions: DEFAULT_INSTRUCTIONS,
     allowed_origins: '',
     history_enabled: true,
+    citations_enabled: true,
     num_history_runs: 5,
   });
   agentDialogOpen.value = true;
@@ -380,6 +382,7 @@ function openEdit(agent: AgentProfile) {
     instructions: agent.instructions,
     allowed_origins: agent.allowed_origins.join('\n'),
     history_enabled: agent.history_enabled,
+    citations_enabled: agent.citations_enabled,
     num_history_runs: agent.num_history_runs,
   });
   agentDialogOpen.value = true;
@@ -388,9 +391,11 @@ function saveAgent() {
   if (!form.name.trim() || !form.instructions.trim() || !props.selectedGroupId) return;
   const editable = {
     name: form.name,
+    llm_config_id: form.llm_config_id,
     instructions: form.instructions,
     allowed_origins: origins(),
     history_enabled: form.history_enabled,
+    citations_enabled: form.citations_enabled,
     num_history_runs: form.num_history_runs,
   };
   if (editingAgent.value) emit('updateAgent', editingAgent.value.id, editable);
@@ -438,7 +443,7 @@ function privateEndpoint(id: string) {
 }
 function webExample(key: string) {
   const closeScript = '</' + 'script>';
-  return `<script src="${sdkUrl}">${closeScript}\n<script>\n  OpenRagAgent.init({\n    publicKey: '${key}',\n    baseUrl: '${apiBase}',\n    title: 'Knowledge Agent'\n  });\n${closeScript}`;
+  return `<script src="${sdkUrl}">${closeScript}\n<script>\n  OpenRagAgent.init({\n    publicKey: '${key}',\n    title: 'Knowledge Agent'\n  });\n${closeScript}`;
 }
 function apiExample(id: string) {
   return `curl -N '${privateEndpoint(id)}' \\\n  -H 'Authorization: Bearer <group API key>' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"message":"Your question","session_id":"thread-1"}'`;

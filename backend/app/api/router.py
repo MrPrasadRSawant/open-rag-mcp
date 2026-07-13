@@ -10,6 +10,7 @@ from app.api.routes import (
     health,
     jobs,
     llm_configs,
+    playground,
     search,
 )
 
@@ -23,4 +24,5 @@ api_router.include_router(document_groups.router)
 api_router.include_router(documents.router)
 api_router.include_router(jobs.router)
 api_router.include_router(llm_configs.router)
+api_router.include_router(playground.router)
 api_router.include_router(search.router)

@@ -35,6 +35,7 @@ class AgentProfile(Base):
     public_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     allowed_origins: Mapped[list[str]] = mapped_column(JSON, default=list)
     history_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    citations_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     num_history_runs: Mapped[int] = mapped_column(Integer, default=5)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

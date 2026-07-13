@@ -23,7 +23,7 @@ def agent_browser_sdk() -> FileResponse:
     return FileResponse(
         Path(__file__).resolve().parents[2] / "static" / "open-rag-agent.js",
         media_type="text/javascript",
-        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"},
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"},
     )
 
 
